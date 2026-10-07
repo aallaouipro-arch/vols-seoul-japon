@@ -1,0 +1,15 @@
+{
+  "name": "Vols Séoul Japon — tracker de prix",
+  "short_name": "Vols Séoul",
+  "description": "Suivi des prix Paris → Séoul → Japon, été 2027",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#111110",
+  "theme_color": "#1c5cab",
+  "lang": "fr",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

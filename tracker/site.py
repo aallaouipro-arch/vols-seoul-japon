@@ -94,10 +94,18 @@ def build(path, cfg, advice, best, dvs, timing, db, generated_at: datetime):
 
     page = f"""<!doctype html>
 <html lang="fr"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Vols Séoul Japon</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✈️</text></svg>">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#1c5cab">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Vols Séoul">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 :root {{
   color-scheme: light;
@@ -126,7 +134,12 @@ def build(path, cfg, advice, best, dvs, timing, db, generated_at: datetime):
 * {{ box-sizing: border-box; }}
 body {{ margin: 0; background: var(--surface-0); color: var(--text-primary);
   font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }}
-main {{ max-width: 1040px; margin: 0 auto; padding: 24px 16px 48px; }}
+main {{ max-width: 1040px; margin: 0 auto; padding: max(24px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 48px max(16px, env(safe-area-inset-left)); }}
+.install {{ display: grid; grid-template-columns: 1fr 1fr auto; gap: 16px; }}
+.install h3 {{ margin: 0 0 6px; font-size: 1rem; }} .install ol {{ margin: 0; padding-left: 20px; }}
+#qr {{ background: #fff; padding: 8px; border-radius: 8px; width: max-content; height: max-content; }}
+@media (max-width: 760px) {{ .install {{ grid-template-columns: 1fr; }} .qr-box {{ display: none; }} }}
+@media (display-mode: standalone) {{ .only-browser {{ display: none; }} }}
 h1 {{ font-size: 1.6rem; margin: 0 0 4px; }} h2 {{ font-size: 1.15rem; margin: 32px 0 12px; }}
 .sub {{ color: var(--text-secondary); margin: 0; }}
 a {{ color: var(--link); }}
@@ -190,14 +203,34 @@ code {{ background: var(--surface-0); padding: 2px 6px; border-radius: 4px; }}
 alors que le jour où l'on <i>part</i> compte beaucoup (départs lundi-mercredi ≈ 12 % moins chers que le week-end) :
 c'est pour ça que les départs du mercredi 21/07 et retours du mercredi 18/08 sont suivis.</p>
 
+<h2 class="only-browser">📲 Installer l'appli sur ton téléphone</h2>
+<div class="card install only-browser">
+  <div><h3>iPhone (Safari)</h3><ol>
+    <li>Ouvrir ce site dans <b>Safari</b></li>
+    <li>Bouton <b>Partager</b> (carré avec flèche ↑)</li>
+    <li><b>Sur l'écran d'accueil</b> → <b>Ajouter</b></li></ol></div>
+  <div><h3>Android / Samsung (Chrome ou Samsung Internet)</h3><ol>
+    <li>Ouvrir ce site dans <b>Chrome</b></li>
+    <li>Menu <b>⋮</b> → <b>Ajouter à l'écran d'accueil</b> (ou <b>Installer l'appli</b>)</li>
+    <li>Confirmer <b>Installer</b></li></ol></div>
+  <div class="qr-box"><div id="qr" aria-label="QR code vers ce site"></div><small class="note">Scanne avec ton téléphone</small></div>
+</div>
+
 <h2>Recevoir les alertes</h2>
 <div class="card">
-<p>📱 <b>Appli</b> : installer <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy</a> (gratuit, sans compte) → « + » → sujet <code>{_e(topic)}</code> : petites baisses de prix + résumé du matin.</p>
+<p>📱 <b>Notifications</b> : installer <b>ntfy</b> (gratuit, sans compte) —
+<a href="https://apps.apple.com/app/ntfy/id1625396347" target="_blank" rel="noopener">App Store (iPhone)</a> ·
+<a href="https://play.google.com/store/apps/details?id=io.heckel.ntfy" target="_blank" rel="noopener">Google Play (Samsung)</a>
+→ « + » → sujet <code>{_e(topic)}</code> → <b>S'abonner</b>, puis autoriser les notifications. Tu reçois les baisses de prix et le résumé du matin.</p>
 <p style="margin-bottom:0">✉️ <b>E-mail</b> : un seul e-mail, envoyé quand c'est le moment d'acheter.</p>
 </div>
 <p class="note">Valises : Google Flights n'inclut pas les frais de bagages ; ils sont estimés par compagnie (survoler la colonne « Valises »). Vérifier le tarif exact avant d'acheter.</p>
 </main>
 <script>
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {{}});
+if (window.QRCode && document.getElementById('qr'))
+  new QRCode(document.getElementById('qr'), {{ text: location.href.startsWith('http') ? location.href : {json.dumps(cfg["notify"].get("site_url", ""))},
+    width: 132, height: 132, colorDark: '#000000', colorLight: '#ffffff' }});
 const DATA = {json.dumps(chart_data, ensure_ascii=False)};
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const ink = css('--text-secondary'), grid = css('--grid');

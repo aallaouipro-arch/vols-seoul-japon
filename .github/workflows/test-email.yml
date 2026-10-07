@@ -1,0 +1,21 @@
+# Bouton "Run workflow" : envoie un e-mail de test au 1er destinataire de EMAIL_TO.
+name: Test e-mail
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      EMAIL_TO: ${{ secrets.EMAIL_TO }}
+      SMTP_USER: ${{ secrets.SMTP_USER }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python run.py --test-email

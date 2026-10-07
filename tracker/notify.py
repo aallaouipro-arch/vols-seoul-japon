@@ -41,9 +41,9 @@ def email_recipients(cfg) -> list[str]:
     return [a.strip() for a in raw.split(",") if a.strip()]
 
 
-def send_email(cfg, subject, text, html=None) -> bool:
+def send_email(cfg, subject, text, html=None, to=None) -> bool:
     n = cfg["notify"]
-    to = email_recipients(cfg)
+    to = to or email_recipients(cfg)
     user, password = os.environ.get("SMTP_USER"), os.environ.get("SMTP_PASSWORD")
     if not (to and user and password):
         print("[notify] e-mail non configuré (EMAIL_TO / SMTP_USER / SMTP_PASSWORD)")

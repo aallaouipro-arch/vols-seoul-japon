@@ -133,8 +133,11 @@ def main():
         print("push envoyé" if ok else "push non envoyé")
         return
     if args.test_email:
-        ok = send_email(cfg, "✈️ Tracker vols : test", "Test : c'est ici que vous recevrez l'unique e-mail « achetez maintenant ».")
-        print(f"e-mail envoyé à {email_recipients(cfg)}" if ok else "e-mail non envoyé")
+        # Test envoyé au 1er destinataire seulement (pas de mail inutile aux autres)
+        ok = send_email(cfg, "✈️ Tracker vols : test", "Test : c'est ici que vous recevrez l'unique e-mail « achetez maintenant ».",
+                        to=email_recipients(cfg)[:1])
+        print("e-mail de test envoyé au 1er destinataire" if ok else "e-mail non envoyé")
+        sys.exit(0 if ok else 1)
         return
 
     db = DB(DATA / "prices.db")
@@ -174,7 +177,7 @@ def main():
             subject, text = buy_email(cfg, advice, winner, cfg["notify"].get("site_url"))
             if send_email(cfg, subject, text):
                 db.set_state("buy_email_sent", {"ts": ts, "price": advice.price})
-                log.info("E-mail d'achat envoyé à %s", email_recipients(cfg))
+                log.info("E-mail d'achat envoyé à %d destinataire(s)", len(email_recipients(cfg)))  # pas d'adresse : logs publics
         # Push : seulement au moment où le signal apparaît
         if previous_action != "ACHETER":
             push(cfg, f"🟢 ACHÈTE ! {advice.price} €", summary, priority=5, tags=["rotating_light"], click=click)

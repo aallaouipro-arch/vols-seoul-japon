@@ -56,7 +56,7 @@ def collect(cfg, db):
     def run_phase(searches, phase):
         nonlocal errors
         for i, s in enumerate(searches, 1):
-            for attempt in (1, 2):
+            for attempt in (1, 2, 3):  # Google renvoie parfois une erreur passagère
                 try:
                     res = gf.search(s.legs, s.max_stops)
                     results[s.key] = res
@@ -67,7 +67,7 @@ def collect(cfg, db):
                     break
                 except Exception as e:
                     log.warning("[%s %d/%d] %s échec (essai %d) : %s", phase, i, len(searches), s.key, attempt, e)
-                    time.sleep(10)
+                    time.sleep(15 * attempt)
             else:
                 errors += 1
             time.sleep(cfg.get("delay_between_requests_s", 4))

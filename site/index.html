@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vols Séoul Japon</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✈️</text></svg>">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  color-scheme: light;
+  --surface-0: #f4f3f0; --surface-1: #fcfcfb; --border: #e2e0da;
+  --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #77756f;
+  --link: #1c5cab;
+  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a;
+  --good: #0ca30c; --warning: #fab219; --neutral: #77756f; --grid: #e9e7e2;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --surface-0: #111110; --surface-1: #1a1a19; --border: #383835;
+    --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #9a998f;
+    --link: #86b6ef;
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --grid: #2a2a28;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-0: #111110; --surface-1: #1a1a19; --border: #383835;
+  --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #9a998f;
+  --link: #86b6ef;
+  --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --grid: #2a2a28;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--surface-0); color: var(--text-primary);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 48px; }
+h1 { font-size: 1.6rem; margin: 0 0 4px; } h2 { font-size: 1.15rem; margin: 32px 0 12px; }
+.sub { color: var(--text-secondary); margin: 0; }
+a { color: var(--link); }
+.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+.verdict { display: flex; gap: 16px; align-items: center; margin-top: 20px; border-left: 6px solid var(--warning); }
+.verdict .icon { font-size: 2rem; }
+.verdict h2 { margin: 0; font-size: 1.3rem; }
+.verdict p { margin: 4px 0 0; color: var(--text-secondary); }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-top: 12px; }
+.kpi small { display: block; color: var(--text-secondary); }
+.kpi b { font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+details { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; }
+summary { display: flex; justify-content: space-between; gap: 12px; padding: 12px 16px; cursor: pointer; }
+summary b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.scroll { overflow-x: auto; padding: 0 16px 12px; }
+table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+th, td { text-align: left; padding: 8px 6px; border-top: 1px solid var(--border); vertical-align: top; }
+th { color: var(--text-secondary); font-weight: 500; }
+td small { color: var(--text-muted); }
+.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.chart { position: relative; height: 320px; }
+.note { color: var(--text-secondary); font-size: .9rem; }
+code { background: var(--surface-0); padding: 2px 6px; border-radius: 4px; }
+</style></head>
+<body><main>
+<h1>✈️ Séoul + Japon — été 2027</h1>
+<p class="sub">Départ CDG/Orly · 1 escale max · 1 valise à l'aller, 2 valises au retour (23 kg)
+ · mis à jour le 07/10/2026 à 12:23 (heure de Paris)</p>
+
+<div class="card verdict">
+  <div class="icon" aria-hidden="true">👀</div>
+  <div><h2>SURVEILLER · 1414 € par personne</h2><p><b>On surveille</b> : prix correct et au plus bas observé, mais on est encore loin de la fenêtre conseillée</p></div>
+</div>
+
+<div class="kpis">
+  <div class="card kpi"><small>Meilleur total (valises incl.)</small><b>1414 €</b></div>
+  <div class="card kpi"><small>Plus bas observé</small><b>1414 €</b></div>
+  <div class="card kpi"><small>Fourchette habituelle (Google + valises)</small><b>1350–1835 €</b></div>
+  <div class="card kpi"><small>Tendance</small><b>+13 €/sem</b></div>
+  <div class="card kpi"><small>Projection à 14 jours</small><b>1439 €</b></div>
+  <div class="card kpi"><small>Fenêtre d'achat conseillée</small><b>02/01 → 22/04/2027</b></div>
+</div>
+
+<h2>Meilleur montage par stratégie</h2>
+
+        <details open>
+          <summary><span>3 allers simples : Paris→Séoul, Séoul→Japon, Japon→Paris</span><b>1414 €</b></summary>
+          <div class="scroll"><table>
+            <thead><tr><th>Vol</th><th>Compagnie</th><th>Départ</th><th class="num">Billet</th><th class="num">Valises</th><th class="num">Total</th></tr></thead>
+            <tbody><tr>
+              <td><a href="https://www.google.com/travel/flights/search?tfs=QgEBSAGYAQIaIxIKMjAyNy0wNy0yMSgBagUSA0NER3IFEgNTRUxqBRIDT1JZ&amp;hl=fr&amp;curr=EUR&amp;gl=FR" target="_blank" rel="noopener">OW CDG+ORY-SEL 2027-07-21</a></td>
+              <td>Lufthansa City Airlines, Lufthansa<br><small>CDG-MUC-ICN · 1 escale · 20h30</small></td>
+              <td>2027-07-21 06:25</td>
+              <td class="num">496 €</td>
+              <td class="num" title="Lufthansa Economy Light : valise 65-90 €">+80 €<br><small>1 valise</small></td>
+              <td class="num"><b>576 €</b></td>
+            </tr><tr>
+              <td><a href="https://www.google.com/travel/flights/search?tfs=QgEBSAGYAQIaHBIKMjAyNy0wNy0yOSgBagUSA1NFTHIFEgNUWU8=&amp;hl=fr&amp;curr=EUR&amp;gl=FR" target="_blank" rel="noopener">OW SEL-TYO 2027-07-29</a></td>
+              <td>ZIPAIR Tokyo<br><small>ICN-NRT · direct · 2h35</small></td>
+              <td>2027-07-29 12:55</td>
+              <td class="num">96 €</td>
+              <td class="num" title="ZIPAIR : valise ~25 € (₩38 100 / ¥4 000)">+25 €<br><small>1 valise</small></td>
+              <td class="num"><b>121 €</b></td>
+            </tr><tr>
+              <td><a href="https://www.google.com/travel/flights/search?tfs=QgEBSAGYAQIaIxIKMjAyNy0wOC0xOCgBagUSA1RZT3IFEgNDREdyBRIDT1JZ&amp;hl=fr&amp;curr=EUR&amp;gl=FR" target="_blank" rel="noopener">OW TYO-CDG+ORY 2027-08-18</a></td>
+              <td>China Southern<br><small>HND-CAN-CDG · 1 escale · 22h40</small></td>
+              <td>2027-08-18 15:40</td>
+              <td class="num">617 €</td>
+              <td class="num" title="China Southern : 1×23 kg (2 en tarif Flex)">+100 €<br><small>2 valises</small></td>
+              <td class="num"><b>717 €</b></td>
+            </tr></tbody>
+          </table></div>
+        </details>
+        <details >
+          <summary><span>A/R Paris↔Séoul + Séoul→Japon + Japon→Séoul</span><b>1468 €</b></summary>
+          <div class="scroll"><table>
+            <thead><tr><th>Vol</th><th>Compagnie</th><th>Départ</th><th class="num">Billet</th><th class="num">Valises</th><th class="num">Total</th></tr></thead>
+            <tbody><tr>
+              <td><a href="https://www.google.com/travel/flights/search?tfs=QgEBSAGYAQEaIxIKMjAyNy0wNy0yMSgBagUSA0NER3IFEgNTRUxqBRIDT1JZGiMSCjIwMjctMDgtMTkoAWoFEgNTRUxyBRIDQ0RHcgUSA09SWQ==&amp;hl=fr&amp;curr=EUR&amp;gl=FR" target="_blank" rel="noopener">RT CDG+ORY-SEL 2027-07-21/2027-08-19</a></td>
+              <td>Lufthansa City Airlines, Lufthansa<br><small>CDG-MUC-ICN · 1 escale · 20h30</small></td>
+              <td>2027-07-21 06:25</td>
+              <td class="num">951 €</td>
+              <td class="num" title="Lufthansa Economy Light : valise 65-90 €">+240 €<br><small>1 valise / 2 valises</small></td>
+              <td class="num"><b>1191 €</b></td>
+            </tr><tr>
+              <td><a href="https://www.google.com/travel/flights/search?tfs=QgEBSAGYAQIaHBIKMjAyNy0wNy0yOSgBagUSA1NFTHIFEgNUWU8=&amp;hl=fr&amp;curr=EUR&amp;gl=FR" target="_blank" rel="noopener">OW SEL-TYO 2027-07-29</a></td>
+              <td>ZIPAIR Tokyo<br><small>ICN-NRT · direct · 2h35</small></td>
+              <td>2027-07-29 12:55</td>
+              <td class="num">96 €</td>
+              <td class="num" title="ZIPAIR : valise ~25 € (₩38 100 / ¥4 000)">+25 €<br><small>1 valise</small></td>
+              <td class="num"><b>121 €</b></td>
+            </tr><tr>
+              <td><a href="https://www.google.com/travel/flights/search?tfs=QgEBSAGYAQIaHBIKMjAyNy0wOC0xNygBagUSA1RZT3IFEgNTRUw=&amp;hl=fr&amp;curr=EUR&amp;gl=FR" target="_blank" rel="noopener">OW TYO-SEL 2027-08-17</a></td>
+              <td>ZIPAIR Tokyo<br><small>NRT-ICN · direct · 2h30</small></td>
+              <td>2027-08-17 08:55</td>
+              <td class="num">106 €</td>
+              <td class="num" title="ZIPAIR : valise ~25 € (₩38 100 / ¥4 000)">+50 €<br><small>2 valises</small></td>
+              <td class="num"><b>156 €</b></td>
+            </tr></tbody>
+          </table></div>
+        </details>
+        <details >
+          <summary><span>A/R Paris↔Tokyo + crochet Tokyo→Séoul→Japon</span><b>1605 €</b></summary>
+          <div class="scroll"><table>
+            <thead><tr><th>Vol</th><th>Compagnie</th><th>Départ</th><th class="num">Billet</th><th class="num">Valises</th><th class="num">Total</th></tr></thead>
+            <tbody><tr>
+              <td><a href="https://www.google.com/travel/flights/search?tfs=QgEBSAGYAQEaIxIKMjAyNy0wNy0yMSgBagUSA0NER3IFEgNUWU9qBRIDT1JZGiMSCjIwMjctMDgtMTgoAWoFEgNUWU9yBRIDQ0RHcgUSA09SWQ==&amp;hl=fr&amp;curr=EUR&amp;gl=FR" target="_blank" rel="noopener">RT CDG+ORY-TYO 2027-07-21/2027-08-18</a></td>
+              <td>China Southern<br><small>CDG-CAN-HND · 1 escale · 19h10</small></td>
+              <td>2027-07-21 12:10</td>
+              <td class="num">1253 €</td>
+              <td class="num" title="China Southern : 1×23 kg (2 en tarif Flex)">+100 €<br><small>1 valise / 2 valises</small></td>
+              <td class="num"><b>1353 €</b></td>
+            </tr><tr>
+              <td><a href="https://www.google.com/travel/flights/search?tfs=QgEBSAGYAQIaHBIKMjAyNy0wNy0yMigBagUSA1RZT3IFEgNTRUw=&amp;hl=fr&amp;curr=EUR&amp;gl=FR" target="_blank" rel="noopener">OW TYO-SEL 2027-07-22</a></td>
+              <td>ZIPAIR Tokyo<br><small>NRT-ICN · direct · 2h30</small></td>
+              <td>2027-07-22 08:55</td>
+              <td class="num">106 €</td>
+              <td class="num" title="ZIPAIR : valise ~25 € (₩38 100 / ¥4 000)">+25 €<br><small>1 valise</small></td>
+              <td class="num"><b>131 €</b></td>
+            </tr><tr>
+              <td><a href="https://www.google.com/travel/flights/search?tfs=QgEBSAGYAQIaHBIKMjAyNy0wNy0yOSgBagUSA1NFTHIFEgNUWU8=&amp;hl=fr&amp;curr=EUR&amp;gl=FR" target="_blank" rel="noopener">OW SEL-TYO 2027-07-29</a></td>
+              <td>ZIPAIR Tokyo<br><small>ICN-NRT · direct · 2h35</small></td>
+              <td>2027-07-29 12:55</td>
+              <td class="num">96 €</td>
+              <td class="num" title="ZIPAIR : valise ~25 € (₩38 100 / ¥4 000)">+25 €<br><small>1 valise</small></td>
+              <td class="num"><b>121 €</b></td>
+            </tr></tbody>
+          </table></div>
+        </details>
+<p>Paris↔Séoul (2027-07-21 → 2027-08-19), valises comprises : <b>1 escale 1191 €</b> (Lufthansa City Airlines, Lufthansa, CDG-MUC-ICN) contre direct 1405 € (Korean Air) → <b>+214 €</b>.</p>
+
+<h2>Évolution du meilleur prix (valises incluses)</h2>
+<div class="card"><div class="chart"><canvas id="history" aria-label="Évolution du prix par stratégie"></canvas></div></div>
+
+<h2>Quand les prix bougent-ils ?</h2>
+<p>Les baisses arrivent le plus souvent le <b>mardi</b> (14 % des variations). L'analyse par heure sera fiable après ~2 semaines de relevés (4 par jour).</p>
+<div class="card"><div class="chart" style="height:240px"><canvas id="weekday" aria-label="Part des baisses de prix par jour de la semaine"></canvas></div></div>
+<details><summary><span>Tableau par jour de la semaine</span></summary><div class="scroll"><table>
+<thead><tr><th>Jour</th><th class="num">Baisses</th><th class="num">Hausses</th><th class="num">Variation moy.</th><th class="num">Mesures</th></tr></thead>
+<tbody><tr><td>lundi</td><td class='num'>11 %</td><td class='num'>10 %</td><td class='num'>+0.30 %</td><td class='num'>240</td></tr><tr><td>mardi</td><td class='num'>14 %</td><td class='num'>14 %</td><td class='num'>-1.16 %</td><td class='num'>242</td></tr><tr><td>mercredi</td><td class='num'>12 %</td><td class='num'>13 %</td><td class='num'>-0.42 %</td><td class='num'>212</td></tr><tr><td>jeudi</td><td class='num'>8 %</td><td class='num'>20 %</td><td class='num'>+1.06 %</td><td class='num'>216</td></tr><tr><td>vendredi</td><td class='num'>9 %</td><td class='num'>21 %</td><td class='num'>+0.53 %</td><td class='num'>231</td></tr><tr><td>samedi</td><td class='num'>6 %</td><td class='num'>8 %</td><td class='num'>-0.85 %</td><td class='num'>236</td></tr><tr><td>dimanche</td><td class='num'>6 %</td><td class='num'>6 %</td><td class='num'>+0.44 %</td><td class='num'>240</td></tr></tbody></table></div></details>
+<details><summary><span>Tableau par heure de relevé</span></summary><div class="scroll"><table>
+<thead><tr><th>Heure</th><th class="num">Baisses</th><th class="num">Variation moy.</th><th class="num">Mesures</th></tr></thead>
+<tbody><tr><td colspan=4>Pas encore de données</td></tr></tbody></table></div></details>
+<p class="note">À savoir : d'après les données Google Flights, le jour où l'on <i>achète</i> change peu le prix (~1-2 %),
+alors que le jour où l'on <i>part</i> compte beaucoup (départs lundi-mercredi ≈ 12 % moins chers que le week-end) :
+c'est pour ça que les départs du mercredi 21/07 et retours du mercredi 18/08 sont suivis.</p>
+
+<h2>Recevoir les alertes</h2>
+<div class="card">
+<p>📱 <b>Appli</b> : installer <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy</a> (gratuit, sans compte) → « + » → sujet <code>vols-seoul-japon-7436f8a14d1c</code> : petites baisses de prix + résumé du matin.</p>
+<p style="margin-bottom:0">✉️ <b>E-mail</b> : un seul e-mail, envoyé quand c'est le moment d'acheter.</p>
+</div>
+<p class="note">Valises : Google Flights n'inclut pas les frais de bagages ; ils sont estimés par compagnie (survoler la colonne « Valises »). Vérifier le tarif exact avant d'acheter.</p>
+</main>
+<script>
+const DATA = {"series": [{"name": "3 allers simples : Paris→Séoul, Séoul→Japon, Japon→Paris", "points": [["2026-10-07T12:20:22", 1414]]}, {"name": "A/R Paris↔Séoul + Séoul→Japon + Japon→Séoul", "points": [["2026-10-07T12:20:22", 1468]]}, {"name": "A/R Paris↔Tokyo + crochet Tokyo→Séoul→Japon", "points": [["2026-10-07T12:20:22", 1605]]}], "weekday": [{"label": "lundi", "n": 240, "drop_rate": 11, "rise_rate": 10, "avg_change_pct": 0.3}, {"label": "mardi", "n": 242, "drop_rate": 14, "rise_rate": 14, "avg_change_pct": -1.16}, {"label": "mercredi", "n": 212, "drop_rate": 12, "rise_rate": 13, "avg_change_pct": -0.42}, {"label": "jeudi", "n": 216, "drop_rate": 8, "rise_rate": 20, "avg_change_pct": 1.06}, {"label": "vendredi", "n": 231, "drop_rate": 9, "rise_rate": 21, "avg_change_pct": 0.53}, {"label": "samedi", "n": 236, "drop_rate": 6, "rise_rate": 8, "avg_change_pct": -0.85}, {"label": "dimanche", "n": 240, "drop_rate": 6, "rise_rate": 6, "avg_change_pct": 0.44}]};
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const ink = css('--text-secondary'), grid = css('--grid');
+Chart.defaults.color = ink; Chart.defaults.font.family = 'system-ui, sans-serif';
+const fmt = v => v.toLocaleString('fr-FR') + ' €';
+const labels = [...new Set(DATA.series.flatMap(s => s.points.map(p => p[0])))].sort();
+new Chart(document.getElementById('history'), {
+  type: 'line',
+  data: { labels,
+    datasets: DATA.series.map((s, i) => {
+      const c = css('--series-' + (i + 1)), byTs = Object.fromEntries(s.points);
+      return { label: s.name, borderColor: c, backgroundColor: c, borderWidth: 2, pointRadius: 3, pointHoverRadius: 5,
+        spanGaps: true, tension: 0, data: labels.map(l => byTs[l] ?? null) };
+    }) },
+  options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+    plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, boxHeight: 2 } },
+      tooltip: { callbacks: { label: c => ' ' + c.dataset.label + ' : ' + fmt(c.parsed.y) } } },
+    scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 8,
+        callback(v) { const t = this.getLabelForValue(v); return t.slice(8, 10) + '/' + t.slice(5, 7) + ' ' + t.slice(11, 13) + 'h'; } } },
+      y: { grid: { color: grid }, ticks: { callback: fmt } } } }
+});
+new Chart(document.getElementById('weekday'), {
+  type: 'bar',
+  data: { labels: DATA.weekday.map(r => r.label),
+    datasets: [{ label: 'Part des variations qui sont des baisses', data: DATA.weekday.map(r => r.drop_rate),
+      backgroundColor: css('--series-1'), borderRadius: 4, maxBarThickness: 36 }] },
+  options: { maintainAspectRatio: false, plugins: { legend: { display: false },
+      tooltip: { callbacks: { label: c => ' ' + c.parsed.y + ' % de baisses (' + DATA.weekday[c.dataIndex].n + ' mesures)' } } },
+    scales: { x: { grid: { display: false } }, y: { grid: { color: grid }, ticks: { callback: v => v + ' %' } } } }
+});
+</script>
+</body></html>

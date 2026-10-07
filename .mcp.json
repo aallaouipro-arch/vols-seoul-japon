@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "google-flights": {
+      "type": "stdio",
+      "command": "C:\\Python314\\python.exe",
+      "args": ["C:\\Users\\iamam\\OneDrive - Groupe ESIEA\\Bureau\\ESIEA 2026-2027\\MCP Google Flight\\mcp_server.py"]
+    },
+    "browserless": {
+      "type": "http",
+      "url": "https://mcp.browserless.io/mcp",
+      "headers": {
+        "Authorization": "Bearer ${BROWSERLESS_TOKEN}"
+      }
+    }
+  }
+}

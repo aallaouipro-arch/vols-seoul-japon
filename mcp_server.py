@@ -33,7 +33,7 @@ def _fmt_result(title: str, res: SearchResult, limit: int, bags: list[int] | Non
             first, last = ins.history[0], ins.history[-1]
             lines.append(f"Historique Google : {first[1]} € le {first[0]} → {last[1]} € le {last[0]} ({len(ins.history)} points)")
     bags = bags or []
-    priced = sorted(((o.price + bag_cost(o.airlines, o.duration_min, bags)[0], o) for o in res.offers), key=lambda t: t[0])
+    priced = sorted(((o.price + bag_cost(o.airlines, o.duration_min, bags, o.airline_code)[0], o) for o in res.offers), key=lambda t: t[0])
     if not priced:
         lines.append("Aucun vol trouvé.")
     if bags:

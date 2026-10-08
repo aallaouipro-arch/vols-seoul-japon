@@ -19,7 +19,8 @@ from fastapi import FastAPI, Header, HTTPException, Query  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
 from tracker import alerts, deals, webpush  # noqa: E402
-from tracker.gflights import GoogleFlights, GoogleFlightsError  # noqa: E402
+from tracker.bags import BAG_INCLUDED_CARRIERS  # noqa: E402
+from tracker.gflights import GoogleFlights, GoogleFlightsError, search_with_bags  # noqa: E402
 from tracker.links import booking_url, partner_links  # noqa: E402
 from tracker.store import get_store  # noqa: E402
 
@@ -97,10 +98,10 @@ def search(
         raise HTTPException(400, "Le retour doit être après l'aller")
     legs = [(depart, o, d)] + ([(ret, d, o)] if ret else [])
     bags = [bags_out] + ([bags_ret] if ret else [])
-    res = _search(lambda: GoogleFlights().search(legs, _stops(stops)))
+    res = _search(lambda: search_with_bags(legs, _stops(stops), BAG_INCLUDED_CARRIERS, any(bags)))
     offers = []
     for off in res.offers:
-        item = alerts.offer_dict(off, bags)
+        item = alerts.offer_dict(off, bags, res.bag_links)
         if not ret:
             item["booking_url"] = booking_url(off.segments)
         offers.append(item)
@@ -134,7 +135,7 @@ def returns(
     res = _search(lambda: GoogleFlights().search_returns([(depart, o, d), (ret, d, o)], out_segments, _stops(stops)))
     offers = []
     for off in res.offers:
-        item = alerts.offer_dict(off, [bags_out, bags_ret])  # prix = total de l'aller-retour
+        item = alerts.offer_dict(off, [bags_out, bags_ret], res.bag_links)  # prix = total de l'aller-retour
         item["booking_url"] = booking_url(out_segments, off.segments)
         offers.append(item)
     offers.sort(key=lambda x: x["total"])

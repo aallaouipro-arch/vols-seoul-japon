@@ -107,7 +107,7 @@ def _leg(results, legs, bags, direct=False):
         return None
     priced = []
     for o in res.offers:
-        extra, note = bag_cost(o.airlines, o.duration_min, bags)
+        extra, note = bag_cost(o.airlines, o.duration_min, bags, o.airline_code)
         priced.append((o.price + extra, extra, note, o))
     total, extra, note, o = min(priced, key=lambda t: t[0])
     return {

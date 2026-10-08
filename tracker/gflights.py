@@ -72,6 +72,7 @@ class SearchResult:
     offers: list[Offer]
     insights: Insights | None
     url: str
+    bag_links: dict[str, str] = field(default_factory=dict)  # code compagnie → page « bagages » officielle
 
     @property
     def best(self) -> Offer | None:
@@ -148,6 +149,12 @@ def _parse_insights(pi) -> Insights | None:
 
 
 def parse_payload(html: str) -> tuple[list[Offer], Insights | None]:
+    offers, insights, _ = parse_full(html)
+    return offers, insights
+
+
+def parse_full(html: str) -> tuple[list[Offer], Insights | None, dict[str, str]]:
+    """Vols + Price insights + liens vers la politique bagages de chaque compagnie (payload[11])."""
     script = LexborHTMLParser(html).css_first(r"script.ds\:1")
     if script is None:
         raise GoogleFlightsError("payload ds:1 absent (page de consentement ou blocage ?)")
@@ -161,7 +168,11 @@ def parse_payload(html: str) -> tuple[list[Offer], Insights | None]:
         for k in (block or [[]])[0] or []:
             if (o := _parse_offer(k)) is not None:
                 offers.append(o)
-    return offers, _parse_insights(payload[5] if len(payload) > 5 else None)
+    bag_links = {}
+    for row in (payload[11] if len(payload) > 11 and payload[11] else []):
+        if isinstance(row, list) and len(row) > 2 and row[0] and row[2]:
+            bag_links[row[0]] = row[2]
+    return offers, _parse_insights(payload[5] if len(payload) > 5 else None), bag_links
 
 
 class GoogleFlights:
@@ -179,11 +190,12 @@ class GoogleFlights:
             timeout=30,
         )
 
-    def search(self, legs: list[tuple[str, str, str]], max_stops: int | None = -1) -> SearchResult:
+    def search(self, legs: list[tuple[str, str, str]], max_stops: int | None = -1, airlines: list[str] | None = None) -> SearchResult:
         """legs = [(date, origine, destination)] ; 1 leg = aller simple, 2 legs = aller-retour.
 
         Origine / destination : code IATA, ou plusieurs séparés par "+" (ex. "CDG+ORY").
         max_stops : 0 = direct, 1 = une escale max, None = illimité, -1 = valeur par défaut du client.
+        airlines : limiter à ces compagnies (codes IATA) — fait remonter des vols absents de la 1re page.
         """
         if len(legs) not in (1, 2):
             raise ValueError("seuls l'aller simple et l'aller-retour sont supportés")
@@ -192,15 +204,16 @@ class GoogleFlights:
             trip="one-way" if len(legs) == 1 else "round-trip",
             adults=self.adults,
             max_stops=self.max_stops if max_stops == -1 else max_stops,
+            airlines=airlines,
         )
         # gl=FR : point de vente France (prix identiques même lancé depuis un serveur à l'étranger)
         params = {"tfs": tfs, "hl": self.language, "curr": self.currency, "gl": "FR"}
         res = self.client.get(URL, params=params)
         if res.status_code != 200:
             raise GoogleFlightsError(f"HTTP {res.status_code}")
-        offers, insights = parse_payload(res.text)
+        offers, insights, bag_links = parse_full(res.text)
         url = f"https://www.google.com/travel/flights/search?tfs={tfs}&hl={self.language}&curr={self.currency}&gl=FR"
-        return SearchResult(offers=offers, insights=insights, url=url)
+        return SearchResult(offers=offers, insights=insights, url=url, bag_links=bag_links)
 
     def search_returns(self, legs, outbound_segments, max_stops: int | None = -1) -> SearchResult:
         """Aller-retour, aller déjà choisi : renvoie les vols retour possibles.
@@ -215,9 +228,30 @@ class GoogleFlights:
         res = self.client.get(URL, params={"tfs": tfs, "hl": self.language, "curr": self.currency, "gl": "FR"})
         if res.status_code != 200:
             raise GoogleFlightsError(f"HTTP {res.status_code}")
-        offers, insights = parse_payload(res.text)
+        offers, insights, bag_links = parse_full(res.text)
         url = f"https://www.google.com/travel/flights/search?tfs={tfs}&hl={self.language}&curr={self.currency}&gl=FR"
-        return SearchResult(offers=offers, insights=insights, url=url)
+        return SearchResult(offers=offers, insights=insights, url=url, bag_links=bag_links)
+
+
+def search_with_bags(legs, max_stops, carriers: list[str], need_bags: bool) -> SearchResult:
+    """Recherche normale, complétée (si des valises sont demandées) par une recherche limitée aux
+    compagnies qui incluent des valises : leurs vols ne sont pas toujours sur la 1re page de Google."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    if not need_bags:
+        return GoogleFlights().search(legs, max_stops)
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        main = ex.submit(GoogleFlights().search, legs, max_stops)
+        extra = ex.submit(GoogleFlights().search, legs, max_stops, carriers)
+        res = main.result()
+        try:
+            more = extra.result()
+        except Exception:
+            return res
+    seen = {tuple(map(tuple, o.segments)) for o in res.offers}
+    res.offers += [o for o in more.offers if tuple(map(tuple, o.segments)) not in seen]
+    res.bag_links = {**more.bag_links, **res.bag_links}
+    return res
 
 
 def _varint(n: int) -> bytes:
@@ -240,7 +274,7 @@ def _segment_field(frm, date, to, airline, number) -> bytes:
     return _field(0x22, enc(0x0A, frm) + enc(0x12, date) + enc(0x1A, to) + enc(0x2A, airline) + enc(0x32, number))
 
 
-def _encode_tfs(legs, trip, adults, max_stops, selected=None) -> str:
+def _encode_tfs(legs, trip, adults, max_stops, selected=None, airlines=None) -> str:
     """Encode la requête `tfs`. Le protobuf de fast-flights n'accepte qu'un aéroport
     par champ, alors que Google en accepte plusieurs (champ répété) : on ajoute
     les aéroports supplémentaires à la main (champ 13 = départ, 14 = arrivée).
@@ -259,5 +293,6 @@ def _encode_tfs(legs, trip, adults, max_stops, selected=None) -> str:
         extra = b"".join(_segment_field(*sg) for sg in selected) if (selected and i == 0) else b""
         extra += b"".join(_field(0x6A, Airport(airport=x).SerializeToString()) for x in a.split("+")[1:])
         extra += b"".join(_field(0x72, Airport(airport=x).SerializeToString()) for x in b.split("+")[1:])
+        extra += b"".join(_field(0x32, c.encode()) for c in (airlines or []))  # champ 6 : compagnies
         raw += _field(0x1A, fd.SerializeToString() + extra)
     return b64encode(raw).decode()

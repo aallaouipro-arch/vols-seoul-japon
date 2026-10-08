@@ -18,6 +18,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from tracker.analyze import advise
+from tracker.booking import attach_booking_options, booking_summary
 from tracker.db import DB
 from tracker.gflights import GoogleFlights
 from tracker.notify import email_recipients, push, send_email
@@ -98,12 +99,16 @@ def format_summary(advice, best, dvs=None) -> str:
             stops = "direct" if l["stops"] == 0 else f"{l['stops']} escale"
             bags = f"+{l['bag_fee']} € valises" if l["bag_fee"] else "valises incluses"
             lines.append(f"   - {l['search']} : {l['price']} € ({l['airlines']}, {l['route']}, {stops}, {bags})")
+            if l.get("booking"):
+                lines.append(f"     où réserver : {booking_summary(l)}")
     return "\n".join(lines)
 
 
 def buy_email(cfg, advice, winner, site_url):
     legs = "\n".join(
-        f"  - {l['search']} : {l['price']} € ({l['airlines']}, {l['route']}, départ {l['depart']})\n    {l['url']}"
+        f"  - {l['search']} : {l['price']} € ({l['airlines']}, {l['route']}, départ {l['depart']})\n"
+        + (f"    Où réserver : {booking_summary(l)}\n" if l.get("booking") else "")
+        + f"    {l.get('booking_url') or l['url']}"
         for l in winner["legs"]
     )
     text = (
@@ -124,6 +129,7 @@ def main():
     ap.add_argument("--no-notify", action="store_true")
     ap.add_argument("--test-notify", action="store_true")
     ap.add_argument("--test-email", action="store_true")
+    ap.add_argument("--no-booking", action="store_true", help="ne pas lire les options de réservation")
     args = ap.parse_args()
 
     cfg = json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
@@ -154,10 +160,13 @@ def main():
             push(cfg, "⚠️ Tracker vols : relevé en échec", f"{errors} recherches en erreur.", priority=4)
         sys.exit(1)
 
+    winner = min(best.values(), key=lambda c: c["total"])
+    if not args.no_booking:
+        attach_booking_options(winner["legs"], cfg["currency"])  # prix site par site (compagnie, agences)
+
     for name, combo in best.items():
         db.save_combo(run_id, ts, name, combo["total"], combo)
 
-    winner = min(best.values(), key=lambda c: c["total"])
     advice = advise(cfg, winner, results, db.best_combo_series(), db.google_history(main_key(cfg)))
     dvs = direct_vs_stop(cfg, results)
     build_site(ROOT / "site" / "index.html", cfg, advice, best, dvs, price_timing(db), db, datetime.now(PARIS))

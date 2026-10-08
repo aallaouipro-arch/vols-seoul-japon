@@ -24,6 +24,20 @@ def _dur(m) -> str:
     return f"{m // 60}h{m % 60:02d}" if m else "?"
 
 
+def _booking_row(l) -> str:
+    """Ligne "Où réserver" : prix du même vol sur chaque site (compagnie, agences)."""
+    opts = l.get("booking")
+    if not opts:
+        return ""
+    chips = "".join(
+        f'<span class="chip{" best" if i == 0 else ""}">{_e(o["site"])}'
+        f'{" ✈" if o["airline"] else ""} <b>{o["price"]} €</b></span>'
+        for i, o in enumerate(opts[:6])
+    )
+    link = f' <a href="{_e(l["booking_url"])}" target="_blank" rel="noopener">voir</a>' if l.get("booking_url") else ""
+    return f'<tr class="booking"><td colspan="6"><small>Où réserver (billet seul) :</small> {chips}{link}</td></tr>'
+
+
 def _bags(b) -> str:
     return " / ".join(f"{n} valise{'s' if n > 1 else ''}" for n in b)
 
@@ -49,7 +63,7 @@ def build(path, cfg, advice, best, dvs, timing, db, generated_at: datetime):
               <td class="num">{l['fare']} €</td>
               <td class="num" title="{_e(l['bag_note'])}">{'+' + str(l['bag_fee']) + ' €' if l['bag_fee'] else 'incluses'}<br><small>{_bags(l['bags'])}</small></td>
               <td class="num"><b>{l['price']} €</b></td>
-            </tr>"""
+            </tr>{_booking_row(l)}"""
             for l in combo["legs"]
         )
         combos_html.append(f"""
@@ -161,6 +175,9 @@ th {{ color: var(--text-secondary); font-weight: 500; }}
 td small {{ color: var(--text-muted); }}
 .num {{ text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }}
 .chart {{ position: relative; height: 320px; }}
+tr.booking td {{ border-top: 0; padding-top: 0; }}
+.chip {{ display: inline-block; margin: 2px 4px 2px 0; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; font-size: .85rem; white-space: nowrap; }}
+.chip.best {{ border-color: var(--good); }}
 .note {{ color: var(--text-secondary); font-size: .9rem; }}
 code {{ background: var(--surface-0); padding: 2px 6px; border-radius: 4px; }}
 </style></head>
@@ -224,6 +241,8 @@ c'est pour ça que les départs du mercredi 21/07 et retours du mercredi 18/08 s
 → « + » → sujet <code>{_e(topic)}</code> → <b>S'abonner</b>, puis autoriser les notifications. Tu reçois les baisses de prix et le résumé du matin.</p>
 <p style="margin-bottom:0">✉️ <b>E-mail</b> : un seul e-mail, envoyé quand c'est le moment d'acheter.</p>
 </div>
+<p class="note">« Où réserver » : prix du même billet sur chaque site proposé par Google Flights (✈ = site de la compagnie).
+Les agences peuvent facturer les valises plus cher que la compagnie ; à faible écart, réserver chez la compagnie est plus simple en cas de problème.</p>
 <p class="note">Valises : Google Flights n'inclut pas les frais de bagages ; ils sont estimés par compagnie (survoler la colonne « Valises »). Vérifier le tarif exact avant d'acheter.</p>
 </main>
 <script>

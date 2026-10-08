@@ -131,6 +131,7 @@ def _leg(results, legs, bags, direct=False):
         "duration_min": o.duration_min,
         "url": res.url,
         "total": total,
+        "segments": o.segments,
     }
 
 

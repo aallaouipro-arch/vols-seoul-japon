@@ -37,6 +37,9 @@ class Offer:
     arrive: str
     duration_min: int
     stops: int
+    # (départ, date, arrivée, code compagnie, n° de vol) par segment : sert à ouvrir
+    # la page "Options de réservation" de ce vol précis
+    segments: list[tuple[str, str, str, str, str]] = field(default_factory=list)
 
 
 @dataclass
@@ -99,7 +102,15 @@ def _parse_offer(k) -> Offer | None:
         arrive=f"{_ymd(f[7])} {_hm(f[8])}",
         duration_min=f[9] or 0,
         stops=len(segs) - 1,
+        segments=[_segment(sg) for sg in segs],
     )
+
+
+def _segment(sg) -> tuple[str, str, str, str, str]:
+    try:
+        return (sg[3], _ymd(sg[20]), sg[6], sg[22][0], sg[22][1])
+    except (IndexError, TypeError):
+        return (sg[3], "", sg[6], "", "")
 
 
 def _parse_insights(pi) -> Insights | None:

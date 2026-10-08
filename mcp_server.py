@@ -168,5 +168,28 @@ def price_history(search_key: str = "RT CDG+ORY-SEL 2027-07-22/2027-08-19") -> s
     return "\n".join(f"{d} : {p} €" for d, p in rows)
 
 
+@server.tool()
+def booking_options(origin: str, destination: str, departure_date: str, max_stops: int | None = 1, flights: int = 2) -> str:
+    """Où réserver : prix du même billet (aller simple) sur chaque site proposé par Google Flights
+    (site de la compagnie, Trip.com, Gotogate, Opodo…), pour les `flights` vols les moins chers (max 4).
+    Utiliser "CDG+ORY" pour Paris."""
+    from tracker.booking import BookingBrowser
+
+    res = GoogleFlights().search(_legs(origin, destination, departure_date, None), max_stops)
+    offers = sorted(res.offers, key=lambda o: o.price)[: min(flights, 4)]
+    out = []
+    with BookingBrowser() as b:
+        for o in offers:
+            try:
+                opts, url = b.options(o.segments)
+            except Exception as e:
+                out.append(f"### {', '.join(o.airlines)} {o.route} ({o.price} €)\nOptions indisponibles : {e}")
+                continue
+            lines = [f"### {', '.join(o.airlines)} · {o.route} · départ {o.depart} (liste : {o.price} €)", url]
+            lines += [f"- {x['site']}{' (compagnie)' if x['airline'] else ''} : **{x['price']} €**" for x in opts]
+            out.append("\n".join(lines))
+    return "\n\n".join(out) or "Aucun vol trouvé."
+
+
 if __name__ == "__main__":
     server.run()

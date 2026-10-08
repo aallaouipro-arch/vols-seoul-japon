@@ -12,4 +12,4 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt
       - run: python -m playwright install --with-deps chromium
-      - run: python scripts/diag.py
+      - run: PYTHONPATH=. python scripts/diag.py

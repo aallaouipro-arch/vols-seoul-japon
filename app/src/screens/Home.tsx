@@ -41,7 +41,7 @@ function TripPin({ trip }: { trip: Trip | null }) {
       <div className="min-w-0 flex-1">
         <div className="text-[11px] font-medium text-muted">Voyage prioritaire · été 2027</div>
         <div className="truncate font-semibold">Séoul & Tokyo</div>
-        {trip && <div className="text-xs text-muted">Départ de Paris dans {trip.advice.days_left} jours</div>}
+        {trip && <div className="text-xs text-muted">Départ dans {trip.advice.days_left} jours</div>}
       </div>
       {trip ? (
         <div className="flex flex-col items-end gap-1">

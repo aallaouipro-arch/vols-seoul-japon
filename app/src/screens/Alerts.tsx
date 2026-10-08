@@ -130,7 +130,7 @@ function WatchSheet({ w, onClose, onChanged }: { w: Watch | null; onClose: () =>
             <AirlineLogo code={w.airline_code} name={w.airline} size={44} />
             <div className="min-w-0 flex-1">
               <div className="text-3xl font-extrabold tabular">{euro(w.last_price)}</div>
-              <div className="truncate text-sm text-muted">
+              <div className="text-sm leading-snug text-muted">
                 {w.bag_fee ? `billet ${euro(w.fare)} + valises ≈ ${euro(w.bag_fee)}` : w.airline || "Meilleur prix actuel"}
               </div>
             </div>
@@ -142,7 +142,7 @@ function WatchSheet({ w, onClose, onChanged }: { w: Watch | null; onClose: () =>
               <div className="font-bold tabular">{euro(w.min_price)}</div>
             </div>
             <div className="rounded-2xl bg-white/5 p-3 ring-1 ring-white/8">
-              <div className="text-[11px] text-muted">Habituel</div>
+              <div className="text-[11px] text-muted">{w.bag_fee ? "Habituel (billet)" : "Habituel"}</div>
               <div className="text-sm font-bold tabular">{w.typical_low ? `${w.typical_low}–${w.typical_high}` : "—"}</div>
             </div>
             <div className="rounded-2xl bg-white/5 p-3 ring-1 ring-white/8">
@@ -171,7 +171,7 @@ function WatchSheet({ w, onClose, onChanged }: { w: Watch | null; onClose: () =>
                   </div>
                 )}
               </div>
-              <div className="mt-2 truncate text-xs text-muted">
+              <div className="mt-2 text-xs leading-snug text-muted">
                 {w.airline} · {w.stops === 0 ? "direct" : "1 escale max"}
                 {bagsLabel(w) ? ` · ${bagsLabel(w)}` : ""}
               </div>

@@ -25,7 +25,8 @@ Voyage (l'utilisateur + un ami, même voyage, **chacun achète son billet**). Pl
 - `api/index.py` : FastAPI en fonction Python Vercel (région `cdg1`) ; réutilise `tracker/` (gflights, links, alerts, store, webpush). Pas de Playwright côté Vercel.
 - `tracker/links.py` : URL de réservation Google (aller simple ET aller-retour, retour trouvé côté serveur via `GoogleFlights.search_returns`) + liens Trip.com/Kayak/Skyscanner.
 - `tracker/store.py` : Upstash Redis via REST (`KV_REST_API_URL/TOKEN`), fichier `data/app_store.json` en local.
-- Alertes : `tracker/alerts.py`, vérifiées toutes les heures par `.github/workflows/alerts.yml` → `/api/cron/check` (Bearer `CRON_SECRET`). Notif si baisse ≥ max(10 €, 3 %), cible atteinte ou niveau Google « bas ».
+- Alertes partagées (device `shared`, visibles + notifiées sur tous les appareils, non supprimables depuis l'appli) : Paris ⇄ Séoul (21-23/07 × 18-20/08) et Séoul ⇄ Tokyo (28-30/07 × 16-17/08), 1 valise aller / 2 retour. Créées via `POST /api/watches/shared` (Bearer `CRON_SECRET`). Dates flexibles = `depart_options` × `ret_options` testées en parallèle.
+- Alertes : `tracker/alerts.py`, vérifiées toutes les heures par `.github/workflows/alerts.yml` → `/api/cron/check` (Bearer `CRON_SECRET`). Notif si cible atteinte, plus bas jamais vu (−5 € min), baisse ≥ max(10 €, 3 %) ou niveau Google « bas ».
 - Le tracker du voyage pousse ses alertes dans l'appli via `/api/broadcast` (secrets GitHub `APP_URL`, `APP_SECRET`).
 - Déploiement : `vercel deploy --prod` depuis la racine (projet `google-tracker`, équipe Hobby). `requirements.txt` = API ; `requirements-tracker.txt` = tracker GitHub.
 

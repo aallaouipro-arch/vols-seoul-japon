@@ -38,6 +38,17 @@ def _booking_row(l) -> str:
     return f'<tr class="booking"><td colspan="6"><small>Où réserver (billet seul) :</small> {chips}{link}</td></tr>'
 
 
+def _group_kpi(best) -> str:
+    """Prix pour tout le groupe (ex. 2 personnes) et alerte si le meilleur tarif n'a plus assez de places."""
+    winner = min(best.values(), key=lambda c: c["total"])
+    g = winner.get("group")
+    if not g:
+        return ""
+    note = ("⚠️ " + _e(" ; ".join(g["warnings"]))) if g["warnings"] else "assez de places au meilleur tarif"
+    return (f'<div class="card kpi"><small>Pour {g["travelers"]} personnes</small><b>{g["total"]} €</b>'
+            f'<small>{note}</small></div>')
+
+
 def _bags(b) -> str:
     return " / ".join(f"{n} valise{'s' if n > 1 else ''}" for n in b)
 
@@ -194,6 +205,7 @@ code {{ background: var(--surface-0); padding: 2px 6px; border-radius: 4px; }}
 <div class="kpis">
   <div class="card kpi"><small>Meilleur total (valises incl.)</small><b>{advice.price} €</b></div>
   <div class="card kpi"><small>Plus bas observé</small><b>{advice.min_seen} €</b></div>
+  {_group_kpi(best)}
   <div class="card kpi"><small>Fourchette habituelle (Google + valises)</small><b>{typical}</b></div>
   <div class="card kpi"><small>Tendance</small><b>{trend}</b></div>
   <div class="card kpi"><small>Projection à 14 jours</small><b>{forecast}</b></div>

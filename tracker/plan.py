@@ -22,6 +22,7 @@ STRATEGIES = {
     "open_jaw": "3 allers simples : Paris→Séoul, Séoul→Japon, Japon→Paris",
     "rt_seoul": "A/R Paris↔Séoul + Séoul→Japon + Japon→Séoul",
     "rt_tokyo": "A/R Paris↔Tokyo + crochet Tokyo→Séoul→Japon",
+    "single_ticket": "Billet unique Paris→Séoul / Japon→Paris + Séoul→Japon",
 }
 
 
@@ -132,6 +133,7 @@ def _leg(results, legs, bags, direct=False):
         "url": res.url,
         "total": total,
         "segments": o.segments,
+        "query": legs,
     }
 
 

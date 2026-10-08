@@ -124,3 +124,87 @@ def booking_summary(leg: dict) -> str:
         if dearer:
             parts.append(f"{len(dearer)} agence{'s' if len(dearer) > 1 else ''} plus chère{'s' if len(dearer) > 1 else ''} (dès {dearer[0]['price']} €)")
     return " · ".join(parts)
+
+
+# --- Billet unique multi-destinations (rendu en JavaScript, donc via le navigateur) ---
+
+def multicity_url(legs, adults=1, max_stops=1, currency="EUR") -> str:
+    from .gflights import _encode_tfs
+
+    tfs = _encode_tfs(legs, trip="multi-city", adults=adults, max_stops=max_stops)
+    return f"https://www.google.com/travel/flights/search?tfs={tfs}&hl=fr&gl=FR&curr={currency}"
+
+
+def _parse_result_item(text: str) -> dict | None:
+    """Texte d'une ligne de résultat Google Flights → {price, airlines, route, depart_time, duration, stops}."""
+    lines = [l.strip() for l in text.replace("\xa0", " ").splitlines() if l.strip()]
+    price = next((int(re.sub(r"\D", "", l)) for l in lines if PRICE_RE.match(l)), None)
+    if price is None or len(lines) < 7:
+        return None
+    return {
+        "price": price,
+        "airlines": lines[3],
+        "duration": lines[4],
+        "route": lines[5],
+        "stops": 0 if lines[6].lower().startswith("sans escale") else int(re.sub(r"\D", "", lines[6]) or 1),
+        "depart_time": lines[0],
+    }
+
+
+def _browser_search(b, url) -> list[dict]:
+    page = b._page
+    page.goto(url, wait_until="domcontentloaded", timeout=45000)
+    page.wait_for_selector("li.pIav2d", timeout=45000)
+    page.wait_for_timeout(1500)  # la liste se complète après le premier rendu
+    items = [_parse_result_item(t) for t in page.locator("li.pIav2d").all_inner_texts()]
+    return sorted((i for i in items if i), key=lambda i: i["price"])
+
+
+def single_ticket_combo(cfg, results) -> dict | None:
+    """Meilleur montage "billet unique" : Paris→Séoul + Japon→Paris sur UN billet
+    (multi-destinations), + Séoul→Japon séparé. Aux dates du meilleur A/R."""
+    from .bags import bag_cost
+    from .plan import _leg, _plan, best_rt_pair
+
+    pair = best_rt_pair(cfg, results)
+    if pair is None:
+        return None
+    o, r = pair
+    P, S = cfg["origin"], cfg["seoul"]
+    bags = [cfg["bags"]["outbound"], cfg["bags"]["return"]]
+    best = None
+    try:
+        with BookingBrowser() as b:
+            for j in cfg["japan_cities"]:
+                legs = [(o, P, S), (r, j, P)]
+                url = multicity_url(legs, max_stops=cfg.get("max_stops", 1), currency=cfg["currency"])
+                try:
+                    items = _browser_search(b, url)
+                except Exception as e:
+                    log.warning("Billet unique %s→%s / %s→%s indisponible : %s", P, S, j, P, e)
+                    continue
+                if not items:
+                    continue
+                priced = []
+                for it in items:
+                    extra, note = bag_cost([it["airlines"]], 12 * 60, bags)
+                    priced.append((it["price"] + extra, extra, note, it))
+                total, extra, note, it = min(priced, key=lambda t: t[0])
+                ticket = {
+                    "search": f"MC {P}-{S} {o} + {j}-{P} {r}",
+                    "price": total, "fare": it["price"], "bag_fee": extra, "bag_note": note, "bags": bags,
+                    "airlines": it["airlines"], "route": f"{it['route']} … {j}→Paris",
+                    "depart": f"{o} {it['depart_time']}", "arrive": "", "stops": it["stops"],
+                    "duration_min": 0, "url": url, "total": total, "segments": [],
+                }
+                hop = _leg(results, *_plan(cfg)["seoul_japan"](j))
+                if hop is None:
+                    continue
+                combo = {"total": ticket["price"] + hop["price"], "legs": [ticket, hop]}
+                log.info("Billet unique via %s : %d € (billet %d € + valises %d €) + Séoul→Japon %d €",
+                         j, combo["total"], it["price"], extra, hop["price"])
+                if best is None or combo["total"] < best["total"]:
+                    best = combo
+    except Exception as e:
+        log.warning("Navigateur indisponible, pas de billet unique : %s", e)
+    return best

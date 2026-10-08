@@ -18,7 +18,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from tracker.analyze import advise
-from tracker.booking import attach_booking_options, booking_summary
+from tracker.booking import attach_booking_options, booking_summary, single_ticket_combo
 from tracker.db import DB
 from tracker.gflights import GoogleFlights
 from tracker.notify import email_recipients, push, send_email
@@ -79,12 +79,42 @@ def collect(cfg, db):
     return run_id, ts, results, errors
 
 
-def format_summary(advice, best, dvs=None) -> str:
+def check_travelers(cfg, winner, results) -> dict | None:
+    """Prix pour tout le groupe : si le tarif le plus bas n'a plus assez de places,
+    le prix pour N personnes dépasse N × le prix pour 1."""
+    n = cfg.get("travelers", 1)
+    if n < 2:
+        return None
+    gf = GoogleFlights(cfg["currency"], cfg["language"], n, cfg.get("max_stops"))
+    extra, warnings = 0, []
+    for leg in winner["legs"]:
+        k = leg["search"]
+        if "query" not in leg or k not in results or not results[k].best:
+            continue  # billet unique (navigateur) : non vérifié
+        try:
+            group = gf.search(leg["query"]).best
+        except Exception as e:
+            log.warning("Prix pour %d sur %s indisponible : %s", n, k, e)
+            continue
+        single = results[k].best.price
+        if group and group.price > n * single + 2:  # 2 € de marge d'arrondi
+            diff = group.price - n * single
+            extra += diff
+            warnings.append(f"{k} : {group.price} € pour {n} au lieu de {n * single} € (+{diff} €)")
+        time.sleep(cfg.get("delay_between_requests_s", 4))
+    return {"travelers": n, "total": n * winner["total"] + extra, "extra": extra, "warnings": warnings}
+
+
+def format_summary(advice, best, dvs=None, group=None) -> str:
     lines = [
         f"**{advice.action}** — {advice.reason}",
         "",
         f"Meilleur total valises comprises : **{advice.price} €** (plus bas observé : {advice.min_seen} €)",
     ]
+    if group:
+        lines.append(f"Pour {group['travelers']} personnes : **{group['total']} €**"
+                     + (" — ⚠️ plus assez de places au tarif le plus bas : " + " ; ".join(group["warnings"]) if group["warnings"]
+                        else f" (= {group['travelers']} × {advice.price} €, assez de places au meilleur tarif)"))
     if dvs:
         lines.append(f"Paris↔Séoul : 1 escale {dvs['one_stop']} € vs direct {dvs['direct']} € ({dvs['saving']:+d} €)")
     if advice.typical_low is not None:
@@ -114,6 +144,10 @@ def buy_email(cfg, advice, winner, site_url):
     text = (
         f"C'est le moment d'acheter vos billets pour « {cfg['trip_name']} ».\n\n"
         f"Prix par personne, valises comprises : {advice.price} €\n"
+        + (f"Pour {winner['group']['travelers']} personnes : {winner['group']['total']} €"
+           + (" (attention : " + " ; ".join(winner["group"]["warnings"]) + ")" if winner["group"]["warnings"] else "")
+           + "\n" if winner.get("group") else "")
+        + "Conseil : achetez les billets ensemble (même réservation) pour être sur les mêmes vols.\n"
         f"Pourquoi maintenant : {advice.reason}\n\n"
         f"Le montage le moins cher :\n{legs}\n\n"
         f"Vérifiez le tarif et les valises sur le site de la compagnie avant de payer.\n"
@@ -160,9 +194,13 @@ def main():
             push(cfg, "⚠️ Tracker vols : relevé en échec", f"{errors} recherches en erreur.", priority=4)
         sys.exit(1)
 
+    if not args.no_booking:  # ces deux étapes passent par un navigateur
+        if single := single_ticket_combo(cfg, results):
+            best["single_ticket"] = single
     winner = min(best.values(), key=lambda c: c["total"])
     if not args.no_booking:
         attach_booking_options(winner["legs"], cfg["currency"])  # prix site par site (compagnie, agences)
+    group = winner["group"] = check_travelers(cfg, winner, results)
 
     for name, combo in best.items():
         db.save_combo(run_id, ts, name, combo["total"], combo)
@@ -171,7 +209,7 @@ def main():
     dvs = direct_vs_stop(cfg, results)
     build_site(ROOT / "site" / "index.html", cfg, advice, best, dvs, price_timing(db), db, datetime.now(PARIS))
     db.set_state("last_action", advice.action)
-    summary = format_summary(advice, best, dvs)
+    summary = format_summary(advice, best, dvs, group)
     log.info("Résultat : %s %d € — %s", advice.action, advice.price, advice.reason)
 
     if args.no_notify:
@@ -179,6 +217,14 @@ def main():
         return
 
     click = cfg["notify"].get("site_url") or winner["legs"][0]["url"]
+
+    # Push : le prix pour le groupe dépasse N × le prix pour 1 (plus assez de places au meilleur tarif)
+    had_warning = db.get_state("group_warning", False)
+    has_warning = bool(group and group["warnings"])
+    if has_warning and not had_warning:
+        push(cfg, f"⚠️ Plus assez de places au meilleur tarif pour {group['travelers']}",
+             "\n".join(group["warnings"]) + "\n\n" + summary, priority=4, tags=["warning"], click=click)
+    db.set_state("group_warning", has_warning)
 
     if advice.action == "ACHETER":
         # E-mail : UNE seule fois pour tout le suivi

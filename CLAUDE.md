@@ -30,6 +30,13 @@ Voyage (l'utilisateur + un ami, même voyage, **chacun achète son billet**). Pl
 - Le tracker du voyage pousse ses alertes dans l'appli via `/api/broadcast` (secrets GitHub `APP_URL`, `APP_SECRET`).
 - Déploiement : `vercel deploy --prod` depuis la racine (projet `google-tracker`, équipe Hobby). `requirements.txt` = API ; `requirements-tracker.txt` = tracker GitHub.
 
+## Faits vérifiés (audit du 08/10/2026)
+- Google Flights (point de vente France) ne calcule PAS les frais de valises en soute (son filtre « Bagages » = bagage à main seulement) → frais estimés dans `tracker/bags.py`, règles **par code IATA** (les noms varient : « JAL », « THAI »). Hypothèse prudente (0 valise incluse) pour les compagnies non répertoriées.
+- La 1re page Google (payload serveur) ne contient que 9-25 vols sur 80-150 ; le moins cher y est, mais pas forcément le moins cher valises comprises → `search_with_bags` ajoute une recherche filtrée sur `BAG_INCLUDED_CARRIERS` (champ 6 du `tfs` = compagnies).
+- Google n'est pas exhaustif (« Référencement non exhaustif ») et ses prix partenaires peuvent dater de < 24 h ; la page de réservation récupère les prix au moment de l'ouverture.
+- Liens de réservation vérifiés : même vol, même prix ; « Continuer » → lufthansa.com, gotogate.fr, zipair.net (ZIPAIR = 2 billets séparés, facturés en KRW / JPY, 1 bouton par billet).
+- `payload[11]` = [code, nom, URL page bagages officielle] par compagnie → `bag_policy_url`.
+
 ## Accès direct Google Flights
 Serveur MCP `google-flights` (`mcp_server.py`, `.mcp.json`) : `search_flights` (valises comprises), `booking_options` (prix par site), `compare_stops`, `flexible_dates`, `trip_tracker_status`, `price_history`. À utiliser pour toute question de prix en temps réel.
 

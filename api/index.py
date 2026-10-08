@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from fastapi import FastAPI, Header, HTTPException, Query  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
-from tracker import alerts, webpush  # noqa: E402
+from tracker import alerts, deals, webpush  # noqa: E402
 from tracker.gflights import GoogleFlights, GoogleFlightsError  # noqa: E402
 from tracker.links import booking_url, partner_links  # noqa: E402
 from tracker.store import get_store  # noqa: E402
@@ -261,6 +261,26 @@ def broadcast(body: BroadcastIn, authorization: str | None = Header(None)):
 def cron_check(authorization: str | None = Header(None)):
     _secret(authorization)
     return alerts.check_due(get_store())
+
+
+# --- Bons plans (scan quotidien, notification hebdomadaire) ---
+
+@app.get("/api/deals")
+def get_deals():
+    return get_store().get("deals") or {"items": [], "generated_at": None}
+
+
+@app.api_route("/api/cron/deals", methods=["GET", "POST"])
+def cron_deals(notify: bool = False, authorization: str | None = Header(None)):
+    _secret(authorization)
+    store = get_store()
+    data = deals.scan()
+    deals.save(store, data)
+    sent = 0
+    if notify and (msg := deals.summary(data)):
+        sent = webpush.broadcast(store, msg[0], msg[1], url="/", tag="deals")
+    return {"checked": data["checked"], "destinations": len(data["items"]),
+            "deals": sum(i["is_deal"] for i in data["items"]), "notified": sent}
 
 
 # --- Voyage prioritaire (calculé par le tracker GitHub, 4 fois par jour) ---

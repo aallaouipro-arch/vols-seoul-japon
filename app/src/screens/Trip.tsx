@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { ArrowLeftRight, CalendarClock, ChevronRight, Luggage, RefreshCw, TrendingDown, TrendingUp } from "lucide-react";
+import { ArrowLeftRight, CalendarClock, ChevronLeft, ChevronRight, Luggage, RefreshCw, TrendingDown, TrendingUp } from "lucide-react";
 import { LineChart, WeekBars, type Series } from "../components/charts";
-import { PushCard } from "../components/PushCard";
 import { AirlineLogo, AnimatedNumber, Badge, Card, LinkButton, SectionTitle, Skeleton, type Tone } from "../components/ui";
 import { api, type Trip, type TripLeg } from "../lib/api";
 import { ago, dayMonth, daysBetween, duration, euro, hhmm, todayIso } from "../lib/format";
-import { openSearch } from "../lib/nav";
+import { go, openSearch } from "../lib/nav";
 
 const ACTION: Record<string, { tone: Tone; emoji: string; label: string }> = {
   ACHETER: { tone: "good", emoji: "✅", label: "C'est le moment d'acheter" },
@@ -68,13 +67,13 @@ function LegCard({ leg, title, index }: { leg: TripLeg; title: string; index: nu
       <div className="mx-4 grid grid-cols-2 gap-2 rounded-2xl bg-white/5 p-3 text-sm ring-1 ring-white/8">
         <div>
           <div className="text-[11px] text-muted">Aller</div>
-          <div className="font-semibold capitalize">
+          <div className="font-semibold">
             {dayMonth(leg.depart_date)} · {hhmm(leg.depart)}
           </div>
         </div>
         <div>
           <div className="text-[11px] text-muted">Retour</div>
-          <div className="font-semibold capitalize">
+          <div className="font-semibold">
             {leg.return_date ? dayMonth(leg.return_date) : "—"}
             {leg.return_flight ? ` · ${leg.return_flight.replace("retour ", "").split(" · ")[0]}` : ""}
           </div>
@@ -183,38 +182,39 @@ export default function TripScreen() {
 
   return (
     <div>
-      <header className="pt-safe flex items-start justify-between px-1">
-        <div>
-          <p className="text-sm font-medium text-muted">Votre voyage · été 2027</p>
-          <h1 className="text-[30px] leading-tight font-extrabold tracking-tight">
-            Paris <span className="text-gradient">⇄ Séoul ⇄</span> Tokyo
-          </h1>
-        </div>
-        <motion.button whileTap={{ rotate: 180 }} onClick={load} className="glass mt-1 grid size-10 place-items-center rounded-full" aria-label="Actualiser">
-          <RefreshCw size={17} className={refreshing ? "animate-spin" : ""} />
+      <header className="pt-safe flex items-center justify-between">
+        <motion.button whileTap={{ scale: 0.95 }} onClick={() => go("/")} className="glass flex items-center gap-1 rounded-full py-2 pr-3.5 pl-2.5 text-sm font-semibold">
+          <ChevronLeft size={17} /> Accueil
+        </motion.button>
+        <motion.button whileTap={{ rotate: 180 }} onClick={load} className="glass grid size-9 place-items-center rounded-full" aria-label="Actualiser">
+          <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
         </motion.button>
       </header>
 
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="relative mt-5 overflow-hidden rounded-[30px] p-5">
-        <div className="bg-gradient-accent absolute inset-0 opacity-90" />
-        <div className="absolute inset-0 bg-[radial-gradient(80%_60%_at_100%_0%,rgba(255,255,255,0.25),transparent_60%)]" />
-        <div className="relative">
-          <div className="flex items-center justify-between">
-            <span className="rounded-full bg-black/25 px-3 py-1 text-xs font-bold tracking-wide">
-              {act.emoji} {a.action}
-            </span>
-            <span className="flex items-center gap-1.5 rounded-full bg-black/25 px-3 py-1 text-xs font-semibold">
-              <CalendarClock size={13} /> J-{a.days_left}
-            </span>
-          </div>
-          <div className="mt-5 text-sm text-white/85">Prix par personne · 2 billets · valises comprises</div>
-          <div className="text-[52px] leading-none font-extrabold tracking-tight">
-            <AnimatedNumber value={a.price} format={euro} />
-          </div>
-          <p className="mt-3 text-sm leading-snug text-white/90">
-            <b>{act.label}</b> : {a.reason}
-          </p>
+      <div className="mt-5 px-1">
+        <p className="text-sm text-muted">Voyage prioritaire · été 2027</p>
+        <h1 className="text-[24px] leading-tight font-extrabold tracking-tight">Paris ⇄ Séoul ⇄ Tokyo</h1>
+      </div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="glass mt-4 rounded-[28px] p-4"
+        style={{ borderLeft: `4px solid var(--color-${act.tone === "neutral" ? "faint" : act.tone})` }}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <Badge tone={act.tone}>
+            {act.emoji} {act.label}
+          </Badge>
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-muted">
+            <CalendarClock size={13} /> J-{a.days_left}
+          </span>
         </div>
+        <div className="mt-3 text-[34px] leading-none font-extrabold tracking-tight">
+          <AnimatedNumber value={a.price} format={euro} />
+        </div>
+        <div className="mt-1 text-xs text-muted">par personne · 2 billets · valises incluses</div>
+        <p className="mt-2 text-[13px] leading-snug text-muted">{a.reason.charAt(0).toUpperCase() + a.reason.slice(1)}.</p>
       </motion.div>
 
       <div className="mt-3 grid grid-cols-3 gap-2">
@@ -227,10 +227,10 @@ export default function TripScreen() {
           <div className="text-sm font-bold tabular">{a.typical_low ? `${a.typical_low}–${a.typical_high}` : "—"}</div>
         </Card>
         <Card className="!p-3">
-          <div className="text-[11px] text-muted">Tendance</div>
+          <div className="text-[11px] text-muted">Tendance / sem.</div>
           <div className={`flex items-center gap-1 font-bold tabular ${a.trend_per_week && a.trend_per_week > 0 ? "text-bad" : "text-good"}`}>
             {a.trend_per_week && a.trend_per_week > 0 ? <TrendingUp size={15} /> : <TrendingDown size={15} />}
-            {a.trend_per_week !== null ? `${a.trend_per_week > 0 ? "+" : ""}${Math.round(a.trend_per_week)} €/s` : "—"}
+            {a.trend_per_week !== null ? `${a.trend_per_week > 0 ? "+" : ""}${Math.round(a.trend_per_week)} €` : "—"}
           </div>
         </Card>
       </div>
@@ -284,9 +284,6 @@ export default function TripScreen() {
         </>
       )}
 
-      <div className="mt-6">
-        <PushCard compact />
-      </div>
     </div>
   );
 }

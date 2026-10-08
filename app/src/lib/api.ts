@@ -75,6 +75,29 @@ export type Watch = {
   booking_url?: string | null;
 };
 
+export type Deal = {
+  code: string;
+  city: string;
+  country: string;
+  region: "europe" | "long";
+  depart: string;
+  ret: string;
+  price: number;
+  typical_low: number | null;
+  typical_high: number | null;
+  level: string | null;
+  discount: number | null;
+  is_deal: boolean;
+  new?: boolean;
+  airline: string;
+  airline_code: string;
+  stops: number;
+  duration_min: number;
+  google_url: string;
+};
+
+export type Deals = { generated_at: string | null; origin?: string; origin_label?: string; items: Deal[] };
+
 export type BookingOption = { site: string; price: number; airline: boolean };
 
 export type TripLeg = {
@@ -177,4 +200,5 @@ export const api = {
     call("/api/push/subscribe", { method: "POST", body: JSON.stringify({ device, subscription }) }),
   testPush: (device: string) => call<{ sent: number }>(`/api/push/test?${qs({ device })}`, { method: "POST" }),
   trip: () => call<Trip>("/api/trip"),
+  deals: () => call<Deals>("/api/deals"),
 };

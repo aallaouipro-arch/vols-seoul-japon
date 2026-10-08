@@ -14,9 +14,11 @@ export const hhmm = (s: string) => s.slice(-5);
 
 const day = (s: string) => new Date(`${s.slice(0, 10)}T12:00:00`);
 
-/** "2027-07-21" → "mer. 21 juil." */
-export const shortDate = (s: string) =>
-  day(s).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" });
+/** Majuscule à la première lettre seulement. */
+export const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** "2027-07-21" → "Mer. 21 juil." */
+export const shortDate = (s: string) => cap(day(s).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" }));
 
 /** "2027-07-21" → "21 juil." */
 export const dayMonth = (s: string) => day(s).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });

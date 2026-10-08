@@ -20,7 +20,8 @@ Voyage (l'utilisateur + un ami, même voyage, **chacun achète son billet**). Pl
 - `tracker/stats.py` : quand les prix baissent (jour de semaine via l'historique Google, heure via nos relevés).
 
 ## Appli Google Tracker (https://google-tracker-self.vercel.app)
-- `app/` : React + Vite + Tailwind 4 + Motion, PWA (`src/sw.ts` : hors ligne + push). Onglets Voyage (lit `/api/trip`), Rechercher, Alertes.
+- `app/` : React + Vite + Tailwind 4 + Motion, PWA (`src/sw.ts` : hors ligne + push). Onglets Accueil (bons plans + carte du voyage → page `#/voyage`), Rechercher, Alertes. L'utilisateur veut une appli du quotidien, pas centrée sur ce seul voyage.
+- Bons plans : `tracker/deals.py` (32 destinations depuis Paris, week-ends Europe / long-courriers, bon plan = niveau Google « bas » ou ≥ 20 % sous la moyenne), stockés dans Redis `deals`, scan quotidien `.github/workflows/deals.yml` → `/api/cron/deals`, notification seulement le lundi (`notify=true`).
 - `api/index.py` : FastAPI en fonction Python Vercel (région `cdg1`) ; réutilise `tracker/` (gflights, links, alerts, store, webpush). Pas de Playwright côté Vercel.
 - `tracker/links.py` : URL de réservation Google (aller simple ET aller-retour, retour trouvé côté serveur via `GoogleFlights.search_returns`) + liens Trip.com/Kayak/Skyscanner.
 - `tracker/store.py` : Upstash Redis via REST (`KV_REST_API_URL/TOKEN`), fichier `data/app_store.json` en local.

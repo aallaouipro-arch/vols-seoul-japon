@@ -1,0 +1,22 @@
+# Bons plans de l'appli Google Tracker : scan des destinations chaque matin,
+# notification récapitulative seulement le lundi (pas de spam).
+name: Bons plans
+
+on:
+  schedule:
+    - cron: "40 5 * * 1"    # lundi ~7h40 Paris : scan + notification
+    - cron: "40 5 * * 0,2-6" # autres jours : scan seul
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Scan des bons plans
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          APP_SECRET: ${{ secrets.APP_SECRET }}
+          NOTIFY: ${{ github.event.schedule == '40 5 * * 1' && 'true' || 'false' }}
+        run: |
+          curl -sS --fail-with-body --max-time 90 -X POST "$APP_URL/api/cron/deals?notify=$NOTIFY" -H "Authorization: Bearer $APP_SECRET"

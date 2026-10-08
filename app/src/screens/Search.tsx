@@ -47,7 +47,7 @@ function DateField({ label, value, min, onChange }: { label: string; value: stri
       <span className="flex items-center gap-1.5 text-[11px] font-medium text-muted">
         <CalendarDays size={12} /> {label}
       </span>
-      <span className="block text-[15px] font-semibold capitalize">{value ? shortDate(value) : "—"}</span>
+      <span className="block text-[15px] font-semibold">{value ? shortDate(value) : "—"}</span>
       <input type="date" value={value} min={min} onChange={(e) => e.target.value && onChange(e.target.value)} className="absolute inset-0 opacity-0" aria-label={label} />
     </label>
   );
@@ -242,7 +242,7 @@ export default function SearchScreen() {
                           }}
                           className={`shrink-0 rounded-2xl px-3.5 py-2.5 text-left ring-1 ${current ? "bg-white/12 ring-white/30" : "bg-white/5 ring-white/8"}`}
                         >
-                          <div className="text-[11px] text-muted capitalize">{shortDate(d.depart)}</div>
+                          <div className="text-[11px] text-muted">{shortDate(d.depart)}</div>
                           <div className={`text-sm font-bold tabular ${best ? "text-good" : ""}`}>{d.price ? euro(d.price) : "—"}</div>
                         </motion.button>
                       );

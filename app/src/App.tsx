@@ -1,13 +1,14 @@
 import { AnimatePresence, motion } from "motion/react";
-import { Bell, Plane, Search } from "lucide-react";
+import { Bell, House, Search } from "lucide-react";
 import { ToastProvider } from "./components/ui";
 import { go, useRoute } from "./lib/nav";
 import AlertsScreen from "./screens/Alerts";
+import HomeScreen from "./screens/Home";
 import SearchScreen from "./screens/Search";
 import TripScreen from "./screens/Trip";
 
 const TABS = [
-  { path: "/", label: "Voyage", icon: Plane },
+  { path: "/", label: "Accueil", icon: House },
   { path: "/recherche", label: "Rechercher", icon: Search },
   { path: "/alertes", label: "Alertes", icon: Bell },
 ];
@@ -34,14 +35,16 @@ function BottomNav({ active }: { active: string }) {
 export default function App() {
   const route = useRoute();
   const tab = route.startsWith("/alertes") ? "/alertes" : route.startsWith("/recherche") ? "/recherche" : "/";
-  const Screen = tab === "/alertes" ? AlertsScreen : tab === "/recherche" ? SearchScreen : TripScreen;
+  const page = route.startsWith("/voyage") ? "/voyage" : tab;
+  const SCREENS: Record<string, () => React.JSX.Element> = { "/": HomeScreen, "/alertes": AlertsScreen, "/recherche": SearchScreen, "/voyage": TripScreen };
+  const Screen = SCREENS[page] || HomeScreen;
 
   return (
     <ToastProvider>
       <main className="pb-nav relative z-10 mx-auto min-h-dvh max-w-xl px-4">
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
-            key={tab}
+            key={page}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}

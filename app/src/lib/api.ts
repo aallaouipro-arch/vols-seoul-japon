@@ -15,6 +15,8 @@ export type Offer = {
   layovers: Layover[];
   segments: string[][];
   booking_url?: string;
+  co2_kg?: number | null;
+  co2_diff_pct?: number | null;
   bag_policy_url?: string | null;
   local_currency?: boolean;
 };
@@ -30,6 +32,9 @@ export type Insights = {
 export type Links = { trip: string; kayak: string; skyscanner: string };
 
 export type Stops = "0" | "1" | "any";
+export type Cabin = "economy" | "premium-economy" | "business" | "first";
+
+export type Pax = { adults: number; children: number; infantsSeat: number; infantsLap: number };
 
 export type SearchQuery = {
   origin: string;
@@ -41,9 +46,14 @@ export type SearchQuery = {
   stops: Stops;
   bagsOut: number;
   bagsRet: number;
+  cabin?: Cabin;
+  pax?: Pax;
 };
 
 export type SearchResponse = {
+  query?: { deep?: boolean };
+  stale?: boolean;
+  fetched_at?: string;
   offers: Offer[];
   insights: Insights | null;
   google_url: string;
@@ -110,6 +120,29 @@ export type Deal = {
   duration_min: number;
   google_url: string;
 };
+
+export type CalendarDay = { depart: string; ret: string | null; price: number | null };
+export type Calendar = { days: CalendarDay[]; min: number | null; max: number | null };
+
+export type ExploreItem = {
+  code: string;
+  city: string;
+  country: string;
+  region: "europe" | "long";
+  lat: number;
+  lon: number;
+  price: number;
+  level: string | null;
+  discount: number | null;
+  airline: string;
+  airline_code: string;
+  stops: number;
+  duration_min: number;
+  google_url: string;
+};
+
+export type MultiLeg = { origin: string; destination: string; date: string; offers: Offer[]; google_url: string; links: Links };
+export type MultiResponse = { legs: MultiLeg[]; total_separate: number | null; google_multicity_url: string };
 
 export type Deals = { generated_at: string | null; origin?: string; origin_label?: string; items: Deal[] };
 
@@ -189,23 +222,38 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 const qs = (o: Record<string, string | number | null | undefined>) =>
   new URLSearchParams(Object.entries(o).filter(([, v]) => v !== null && v !== undefined && v !== "") as [string, string][]).toString();
 
+const paxParams = (q: { stops: Stops; cabin?: Cabin; pax?: Pax }) => ({
+  stops: q.stops,
+  cabin: q.cabin || "economy",
+  adults: q.pax?.adults ?? 1,
+  children: q.pax?.children ?? 0,
+  infants_seat: q.pax?.infantsSeat ?? 0,
+  infants_lap: q.pax?.infantsLap ?? 0,
+});
+
 const searchParams = (q: SearchQuery) => ({
   origin: q.origin,
   destination: q.destination,
   depart: q.depart,
   ret: q.ret,
-  stops: q.stops,
   bags_out: q.bagsOut,
   bags_ret: q.ret ? q.bagsRet : 0,
+  ...paxParams(q),
 });
 
 export const api = {
   config: () => call<{ vapid_public_key: string }>("/api/config"),
-  search: (q: SearchQuery) => call<SearchResponse>(`/api/search?${qs(searchParams(q))}`),
+  search: (q: SearchQuery, deep = false) => call<SearchResponse>(`/api/search?${qs({ ...searchParams(q), deep: deep ? "true" : "" })}`),
   returns: (q: SearchQuery, out: string[][]) =>
     call<{ offers: Offer[]; google_url: string }>(`/api/returns?${qs({ ...searchParams(q), out: JSON.stringify(out) })}`),
   flex: (q: SearchQuery) =>
-    call<{ days: FlexDay[] }>(`/api/flex?${qs({ origin: q.origin, destination: q.destination, depart: q.depart, ret: q.ret, stops: q.stops })}`),
+    call<{ days: FlexDay[] }>(`/api/flex?${qs({ origin: q.origin, destination: q.destination, depart: q.depart, ret: q.ret, ...paxParams(q) })}`),
+  calendar: (q: SearchQuery, start: string, stay: number | null) =>
+    call<Calendar>(`/api/calendar?${qs({ origin: q.origin, destination: q.destination, start, days: 30, stay, ...paxParams(q) })}`),
+  explore: (p: { origin: string; depart: string; ret: string | null; stops: Stops; cabin?: Cabin; pax?: Pax }) =>
+    call<{ items: ExploreItem[]; stale?: boolean; fetched_at?: string }>(`/api/explore?${qs({ origin: p.origin, depart: p.depart, ret: p.ret, ...paxParams(p) })}`),
+  multi: (body: Record<string, unknown>) => call<MultiResponse>("/api/multi", { method: "POST", body: JSON.stringify(body) }),
+  health: () => call<{ ok: boolean; last_check: string | null; error: string | null }>("/api/health"),
   watches: (device: string) => call<{ watches: Watch[] }>(`/api/watches?${qs({ device })}`),
   createWatch: (body: Record<string, unknown>) => call<Watch>("/api/watches", { method: "POST", body: JSON.stringify(body) }),
   deleteWatch: (id: string, device: string) => call(`/api/watches/${id}?${qs({ device })}`, { method: "DELETE" }),

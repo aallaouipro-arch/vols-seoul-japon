@@ -28,9 +28,13 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def offer_dict(o: Offer, bags: list[int], bag_links: dict | None = None) -> dict:
+def offer_dict(o: Offer, bags: list[int], bag_links: dict | None = None, pax: int = 1) -> dict:
+    """pax : voyageurs avec valises (adultes + enfants) ; le prix Google est déjà le total du groupe."""
     fee, note = bag_cost(o.airlines, o.duration_min, bags, o.airline_code) if any(bags) else (0, "")
+    fee *= max(1, pax)
     return {
+        "co2_kg": o.co2_kg,
+        "co2_diff_pct": o.co2_diff_pct,
         "bag_policy_url": (bag_links or {}).get(o.airline_code) or BAG_POLICY_FALLBACK.get(o.airline_code),
         "local_currency": o.airline_code in LOCAL_CURRENCY,
         "price": o.price,

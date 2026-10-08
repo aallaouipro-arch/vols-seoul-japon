@@ -1,0 +1,40 @@
+# Contrôle de santé de Google Tracker toutes les 3 h : une recherche témoin vérifie que
+# Google Flights est toujours lisible. En cas de panne : notification sur les téléphones
+# (envoyée par le serveur, une seule fois) + ticket GitHub pour la réparation.
+name: Santé de l'appli
+
+on:
+  schedule:
+    - cron: "5 */3 * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Recherche témoin
+        id: check
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          APP_SECRET: ${{ secrets.APP_SECRET }}
+        run: |
+          out=$(curl -sS --max-time 90 -X POST "$APP_URL/api/cron/health" -H "Authorization: Bearer $APP_SECRET" || echo '{"ok":false,"message":"serveur injoignable"}')
+          echo "$out"
+          echo "result=$out" >> "$GITHUB_OUTPUT"
+          echo "$out" | grep -q '"ok":true'
+      - name: Ticket de réparation
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESULT: ${{ steps.check.outputs.result }}
+        run: |
+          if ! gh issue list --repo "$GITHUB_REPOSITORY" --state open --label panne --json number --jq '.[0].number' | grep -q .; then
+            gh label create panne --repo "$GITHUB_REPOSITORY" --color B60205 --force
+            gh issue create --repo "$GITHUB_REPOSITORY" --label panne \
+              --title "Google Tracker : lecture de Google Flights en panne" \
+              --body "Le contrôle de santé a échoué : $RESULT. Google Flights a probablement changé le format de ses pages ; il faut adapter tracker/gflights.py."
+          fi

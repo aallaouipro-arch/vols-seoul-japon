@@ -1,5 +1,6 @@
+import { lazy, Suspense } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Bell, House, Search } from "lucide-react";
+import { Bell, Compass, House, Search } from "lucide-react";
 import { ToastProvider } from "./components/ui";
 import { go, useRoute } from "./lib/nav";
 import AlertsScreen from "./screens/Alerts";
@@ -7,8 +8,11 @@ import HomeScreen from "./screens/Home";
 import SearchScreen from "./screens/Search";
 import TripScreen from "./screens/Trip";
 
+const ExploreScreen = lazy(() => import("./screens/Explore")); // carte chargée à la demande
+
 const TABS = [
   { path: "/", label: "Accueil", icon: House },
+  { path: "/explorer", label: "Explorer", icon: Compass },
   { path: "/recherche", label: "Rechercher", icon: Search },
   { path: "/alertes", label: "Alertes", icon: Bell },
 ];
@@ -23,7 +27,7 @@ function BottomNav({ active }: { active: string }) {
             <button key={path} onClick={() => go(path)} className="relative flex flex-1 flex-col items-center gap-0.5 rounded-[20px] py-2" aria-current={on ? "page" : undefined}>
               {on && <motion.span layoutId="tab" className="bg-gradient-accent absolute inset-0 rounded-[20px] opacity-95" transition={{ type: "spring", damping: 28, stiffness: 340 }} />}
               <Icon size={20} className={`relative ${on ? "text-white" : "text-muted"}`} strokeWidth={on ? 2.4 : 2} />
-              <span className={`relative text-[11px] font-semibold ${on ? "text-white" : "text-muted"}`}>{label}</span>
+              <span className={`relative text-[10.5px] font-semibold ${on ? "text-white" : "text-muted"}`}>{label}</span>
             </button>
           );
         })}
@@ -34,9 +38,9 @@ function BottomNav({ active }: { active: string }) {
 
 export default function App() {
   const route = useRoute();
-  const tab = route.startsWith("/alertes") ? "/alertes" : route.startsWith("/recherche") ? "/recherche" : "/";
+  const tab = ["/alertes", "/recherche", "/explorer"].find((t) => route.startsWith(t)) || "/";
   const page = route.startsWith("/voyage") ? "/voyage" : tab;
-  const SCREENS: Record<string, () => React.JSX.Element> = { "/": HomeScreen, "/alertes": AlertsScreen, "/recherche": SearchScreen, "/voyage": TripScreen };
+  const SCREENS: Record<string, React.ComponentType> = { "/": HomeScreen, "/explorer": ExploreScreen, "/alertes": AlertsScreen, "/recherche": SearchScreen, "/voyage": TripScreen };
   const Screen = SCREENS[page] || HomeScreen;
 
   return (
@@ -50,7 +54,9 @@ export default function App() {
             exit={{ opacity: 0, y: -6 }}
             transition={{ duration: 0.22, ease: "easeOut" }}
           >
-            <Screen />
+            <Suspense fallback={<div className="pt-safe text-sm text-muted">Chargement…</div>}>
+              <Screen />
+            </Suspense>
           </motion.div>
         </AnimatePresence>
         <footer className="mt-10 text-center text-[11px] leading-relaxed text-faint">

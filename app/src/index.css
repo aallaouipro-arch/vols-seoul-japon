@@ -122,3 +122,47 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     animation: none;
   }
 }
+
+/* Carte Explorer (Leaflet) : tuiles OpenStreetMap passées en sombre */
+.gt-tiles-dark {
+  filter: invert(1) hue-rotate(200deg) brightness(0.85) contrast(0.9) saturate(0.35);
+}
+.leaflet-container {
+  background: #0b0d14;
+  font-family: var(--font-sans);
+}
+.gt-pin {
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgb(17 19 28 / 0.92);
+  border: 1px solid rgb(255 255 255 / 0.18);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.5);
+  width: max-content;
+}
+.gt-pin-deal {
+  background: #059669;
+  border-color: #34d399;
+}
+.gt-pin-origin {
+  background: linear-gradient(120deg, #8b5cf6, #22d3ee);
+  border: 0;
+}
+.leaflet-control-attribution {
+  background: rgb(7 8 12 / 0.7) !important;
+  color: #8b8d9c !important;
+  font-size: 9px !important;
+}
+.leaflet-control-attribution a {
+  color: #a5b4fc !important;
+}
+.leaflet-bar a {
+  background: #161925 !important;
+  color: #fff !important;
+  border-color: rgb(255 255 255 / 0.1) !important;
+}

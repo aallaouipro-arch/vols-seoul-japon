@@ -181,6 +181,7 @@ export default function HomeScreen() {
   const [filter, setFilter] = useState<Filter>("all");
   const [refreshing, setRefreshing] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  const [health, setHealth] = useState<{ ok: boolean; error: string | null } | null>(null);
 
   const load = () => {
     setRefreshing(true);
@@ -194,6 +195,7 @@ export default function HomeScreen() {
         localStorage.setItem("gt-trip", JSON.stringify(t));
       }),
       api.watches(deviceId()).then((r) => setWatches(r.watches)),
+      api.health().then(setHealth),
     ]).finally(() => setRefreshing(false));
   };
   useEffect(load, []);
@@ -223,6 +225,13 @@ export default function HomeScreen() {
           Au départ de Paris · {deals?.generated_at ? `mis à jour ${ago(deals.generated_at)}` : "premier scan en cours"}
         </p>
       </div>
+
+      {health && !health.ok && (
+        <div className="mt-4 rounded-2xl bg-warn/12 px-4 py-3 text-xs leading-relaxed text-warn ring-1 ring-warn/30">
+          ⚠️ La lecture de Google Flights est perturbée ({health.error}). Les prix affichés peuvent dater et les alertes sont en pause le temps de la
+          réparation.
+        </div>
+      )}
 
       <div className="mt-5 space-y-2.5">
         <TripPin trip={trip} />

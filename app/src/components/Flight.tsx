@@ -35,8 +35,13 @@ export function OfferCard({ offer, cheapest, onClick, index = 0 }: { offer: Offe
         <AirlineLogo code={offer.airline_code} name={offer.airlines[0]} />
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-medium text-white/85">{offer.airlines.join(", ")}</div>
-          <div className="text-xs text-muted">
+          <div className="truncate text-xs text-muted">
             <StopsLabel offer={offer} />
+            {offer.co2_kg ? (
+              <span className={offer.co2_diff_pct !== null && offer.co2_diff_pct !== undefined && offer.co2_diff_pct < 0 ? "text-good" : ""}>
+                {" "}· {offer.co2_kg} kg CO₂{offer.co2_diff_pct ? ` (${offer.co2_diff_pct > 0 ? "+" : ""}${offer.co2_diff_pct} %)` : ""}
+              </span>
+            ) : null}
           </div>
         </div>
       </div>

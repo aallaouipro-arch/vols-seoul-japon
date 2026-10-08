@@ -114,3 +114,38 @@ def summary(data: dict, limit: int = 3) -> tuple[str, str] | None:
     top = " · ".join(f"{d['city']} {d['price']} € (-{d['discount']} %)" if d["discount"] else f"{d['city']} {d['price']} €" for d in deals[:limit])
     n = len(deals)
     return f"🔥 {n} bon{'s' if n > 1 else ''} plan{'s' if n > 1 else ''} depuis Paris cette semaine", top
+
+
+# --- Explorer : prix de toutes les destinations pour des dates choisies ---
+
+def explore(origin: str, depart: str, ret: str | None, opts=None, workers: int = 12) -> list[dict]:
+    """Meilleur prix (et niveau Google) vers chaque destination de `places.PLACES`."""
+    from .gflights import SearchOptions
+    from .places import PLACES
+
+    opts = opts or SearchOptions(max_stops=1)
+
+    def one(p):
+        code, city, country, region, lat, lon = p
+        if code in origin.split("+") or code == origin:
+            return None
+        legs = [(depart, origin, code)] + ([(ret, code, origin)] if ret else [])
+        try:
+            res = GoogleFlights().search(legs, opts=opts)
+        except Exception:
+            return None
+        best = res.best
+        if not best:
+            return None
+        ins = res.insights
+        low, high = (ins.typical_low, ins.typical_high) if ins else (None, None)
+        discount = round((1 - best.price / ((low + high) / 2)) * 100) if low and high else None
+        return {
+            "code": code, "city": city, "country": country, "region": region, "lat": lat, "lon": lon,
+            "price": best.price, "level": ins.level if ins else None, "discount": discount,
+            "airline": ", ".join(best.airlines), "airline_code": best.airline_code,
+            "stops": best.stops, "duration_min": best.duration_min, "google_url": res.url,
+        }
+
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        return sorted((r for r in ex.map(one, PLACES) if r), key=lambda r: r["price"])

@@ -7,6 +7,7 @@ l'intégration Vercel). En local, sans ces variables : un fichier JSON.
 import json
 import os
 import threading
+import time
 import urllib.request
 from pathlib import Path
 
@@ -15,7 +16,8 @@ class Store:
     def get(self, key: str):
         raise NotImplementedError
 
-    def set(self, key: str, value) -> None:
+    def set(self, key: str, value, ex: int | None = None) -> None:
+        """ex : durée de vie en secondes (cache)."""
         raise NotImplementedError
 
     def delete(self, key: str) -> None:
@@ -62,8 +64,9 @@ class RedisStore(Store):
         raw = self._call(["GET", key])[0]
         return json.loads(raw) if raw is not None else None
 
-    def set(self, key, value):
-        self._call(["SET", key, json.dumps(value, ensure_ascii=False)])
+    def set(self, key, value, ex=None):
+        cmd = ["SET", key, json.dumps(value, ensure_ascii=False)]
+        self._call(cmd + (["EX", int(ex)] if ex else []))
 
     def delete(self, key):
         self._call(["DEL", key])
@@ -110,10 +113,13 @@ class FileStore(Store):
             return out
 
     def get(self, key):
-        return self._load().get(key)
+        v = self._load().get(key)
+        if isinstance(v, dict) and "__exp" in v:  # entrée de cache avec expiration
+            return v["v"] if v["__exp"] > time.time() else None
+        return v
 
-    def set(self, key, value):
-        self._edit(lambda d: d.__setitem__(key, value))
+    def set(self, key, value, ex=None):
+        self._edit(lambda d: d.__setitem__(key, {"__exp": time.time() + ex, "v": value} if ex else value))
 
     def delete(self, key):
         self._edit(lambda d: d.pop(key, None))

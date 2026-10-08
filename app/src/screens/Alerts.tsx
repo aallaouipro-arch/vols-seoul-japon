@@ -176,6 +176,18 @@ function WatchSheet({ w, onClose, onChanged }: { w: Watch | null; onClose: () =>
                 {bagsLabel(w) ? ` · ${bagsLabel(w)}` : ""}
               </div>
               {flexLabel(w) && <div className="mt-1 text-[11px] text-faint">{flexLabel(w)} à chaque vérification</div>}
+              {w.bag_note && <div className="mt-2 text-[11px] text-faint">Valises : {w.bag_note} (estimation)</div>}
+              {w.bag_policy_url && (
+                <a href={w.bag_policy_url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-accent-2">
+                  <Luggage size={12} /> Vérifier les frais de valises sur le site de la compagnie <ExternalLink size={11} />
+                </a>
+              )}
+              {w.local_currency && (
+                <div className="mt-2 text-[11px] leading-relaxed text-faint">
+                  Billets séparés aller et retour, facturés en wons et en yens : Google propose un bouton « Continuer » par billet. Ta banque peut
+                  ajouter des frais de change.
+                </div>
+              )}
             </div>
           )}
           <div className="rounded-3xl bg-white/5 p-3 ring-1 ring-white/8">

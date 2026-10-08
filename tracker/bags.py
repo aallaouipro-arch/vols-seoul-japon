@@ -136,6 +136,14 @@ SHORT_HAUL = {
 # recherche dédiée les fait remonter (elles ne sont pas toujours sur la 1re page de Google)
 BAG_INCLUDED_CARRIERS = sorted({c for c, r in LONG_HAUL.items() if r.included >= 1} - {"B0"})
 
+# Pages « bagages » officielles quand Google ne les fournit pas
+BAG_POLICY_FALLBACK = {
+    "ZG": "https://www.zipair.net/en/service/baggage",
+}
+
+# Compagnies low-cost asiatiques qui facturent dans la devise du pays de départ
+LOCAL_CURRENCY = {"ZG", "MM", "GK", "7C", "TW", "LJ", "BX", "RS", "ZE", "RF"}
+
 DEFAULT_LONG = BagRule(0, 90, "compagnie non répertoriée : on suppose aucune valise incluse")
 DEFAULT_SHORT = BagRule(0, 40, "compagnie non répertoriée : on suppose aucune valise incluse")
 

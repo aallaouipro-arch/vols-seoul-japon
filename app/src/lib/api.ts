@@ -15,6 +15,8 @@ export type Offer = {
   layovers: Layover[];
   segments: string[][];
   booking_url?: string;
+  bag_policy_url?: string | null;
+  local_currency?: boolean;
 };
 
 export type Insights = {
@@ -83,6 +85,9 @@ export type Watch = {
   best_ret?: string | null;
   depart_time?: string;
   return_flight?: string | null;
+  bag_note?: string | null;
+  bag_policy_url?: string | null;
+  local_currency?: boolean;
 };
 
 export type Deal = {

@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timezone
 from itertools import product
 
-from .bags import BAG_INCLUDED_CARRIERS, bag_cost
+from .bags import BAG_INCLUDED_CARRIERS, BAG_POLICY_FALLBACK, LOCAL_CURRENCY, bag_cost
 from .gflights import GoogleFlights, Offer, search_with_bags
 from .links import booking_url
 from .store import Store
@@ -31,7 +31,8 @@ def now_iso() -> str:
 def offer_dict(o: Offer, bags: list[int], bag_links: dict | None = None) -> dict:
     fee, note = bag_cost(o.airlines, o.duration_min, bags, o.airline_code) if any(bags) else (0, "")
     return {
-        "bag_policy_url": (bag_links or {}).get(o.airline_code),
+        "bag_policy_url": (bag_links or {}).get(o.airline_code) or BAG_POLICY_FALLBACK.get(o.airline_code),
+        "local_currency": o.airline_code in LOCAL_CURRENCY,
         "price": o.price,
         "bag_fee": fee,
         "bag_note": note,
@@ -192,7 +193,8 @@ def check(store: Store, w: dict, gf: GoogleFlights | None = None) -> dict | None
         airline=who,
         airline_code=best.airline_code,
         bag_note=bag_cost(best.airlines, best.duration_min, bags, best.airline_code)[1] if any(bags) else None,
-        bag_policy_url=res.bag_links.get(best.airline_code),
+        bag_policy_url=res.bag_links.get(best.airline_code) or BAG_POLICY_FALLBACK.get(best.airline_code),
+        local_currency=best.airline_code in LOCAL_CURRENCY,
         stops_found=best.stops,
         best_depart=dep,
         best_ret=ret,

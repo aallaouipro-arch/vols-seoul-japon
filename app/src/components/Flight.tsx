@@ -259,9 +259,20 @@ export function OfferSheet({
               ) : (
                 <div className="rounded-2xl bg-white/5 px-4 py-3 text-center text-sm text-muted">Choisis un vol retour pour voir les offres</div>
               )}
+              {(isRT ? ret : offer)?.bag_policy_url && (
+                <a
+                  href={(isRT ? ret : offer)!.bag_policy_url!}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-1.5 py-1 text-xs font-semibold text-accent-2"
+                >
+                  <Luggage size={13} /> Vérifier les frais de valises chez {(isRT ? ret : offer)!.airlines[0]} <ExternalLink size={12} />
+                </a>
+              )}
               <p className="px-1 text-[11px] leading-relaxed text-faint">
-                La page Google Flights liste chaque site qui vend ce billet avec son prix : la compagnie, Trip.com, Gotogate, Opodo…
-                Les frais de valises sont estimés : vérifie-les avant de payer.
+                La page Google Flights liste les sites partenaires qui vendent ce billet, avec leur prix (compagnie, agences…). Google ne référence pas
+                tous les sites et ne calcule pas les frais de valises en soute : ils sont estimés ici, vérifie-les avant de payer.
+                {(isRT ? ret : offer)?.local_currency && " Cette compagnie facture dans la devise locale (wons, yens) : ta banque peut ajouter des frais de change."}
               </p>
             </div>
           </div>

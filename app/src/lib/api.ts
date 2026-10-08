@@ -73,6 +73,16 @@ export type Watch = {
   airline_code?: string;
   google_url?: string;
   booking_url?: string | null;
+  shared?: boolean;
+  note?: string | null;
+  depart_options?: string[] | null;
+  ret_options?: string[] | null;
+  fare?: number;
+  bag_fee?: number;
+  best_depart?: string;
+  best_ret?: string | null;
+  depart_time?: string;
+  return_flight?: string | null;
 };
 
 export type Deal = {

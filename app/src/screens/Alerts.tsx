@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { BellRing, ExternalLink, RefreshCw, Search, Target, Trash2 } from "lucide-react";
+import { BellRing, ExternalLink, Luggage, RefreshCw, Search, Target, Trash2, Users } from "lucide-react";
 import { LineChart, Sparkline } from "../components/charts";
 import { PushCard } from "../components/PushCard";
 import { AirlineLogo, Badge, LevelBadge, LinkButton, SectionTitle, Sheet, Skeleton, useToast } from "../components/ui";
@@ -17,6 +17,22 @@ function useHistory(id: string | null) {
   }, [id]);
   return hist;
 }
+
+const routeLabel = (w: Watch) => `${w.origin_label} ${w.ret ? "⇄" : "→"} ${w.destination_label}`;
+
+/** "21 juil. → 19 août" : meilleures dates trouvées (dates flexibles) ou dates de l'alerte. */
+const datesLabel = (w: Watch) => {
+  const d = w.best_depart || w.depart;
+  const r = w.best_ret ?? w.ret;
+  return `${dayMonth(d)}${r ? ` → ${dayMonth(r)}` : " · aller simple"}`;
+};
+
+const flexLabel = (w: Watch) => {
+  const n = (w.depart_options?.length || 1) * (w.ret_options?.length || 1);
+  return n > 1 ? `${n} combinaisons de dates testées` : null;
+};
+
+const bagsLabel = (w: Watch) => (w.bags_out || w.bags_ret ? `${w.bags_out} valise${w.bags_out > 1 ? "s" : ""} aller · ${w.bags_ret} retour` : null);
 
 function WatchCard({ w, index, onOpen }: { w: Watch; index: number; onOpen: () => void }) {
   const hist = useHistory(w.id);
@@ -35,14 +51,17 @@ function WatchCard({ w, index, onOpen }: { w: Watch; index: number; onOpen: () =
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="truncate text-[17px] font-bold">
-            {w.origin_label} → {w.destination_label}
-          </div>
+          <div className="truncate text-[17px] font-bold">{routeLabel(w)}</div>
           <div className="text-xs text-muted">
-            {dayMonth(w.depart)}
-            {w.ret ? ` → ${dayMonth(w.ret)}` : " · aller simple"}
+            {w.shared ? "Meilleur : " : ""}
+            {datesLabel(w)}
             {w.target ? ` · cible ${euro(w.target)}` : ""}
           </div>
+          {bagsLabel(w) && (
+            <div className="mt-0.5 flex items-center gap-1 text-[11px] text-faint">
+              <Luggage size={11} /> {bagsLabel(w)} · valises comprises
+            </div>
+          )}
         </div>
         <div className="text-right">
           <div className="text-xl font-extrabold tabular">{euro(w.last_price)}</div>
@@ -55,6 +74,11 @@ function WatchCard({ w, index, onOpen }: { w: Watch; index: number; onOpen: () =
       </div>
       <div className="mt-3 flex items-end justify-between">
         <div className="flex flex-wrap items-center gap-1.5">
+          {w.shared && (
+            <Badge tone="accent">
+              <Users size={11} /> Partagé
+            </Badge>
+          )}
           {w.level && <LevelBadge level={w.level} />}
           <span className="text-[11px] text-faint">vérifié {ago(w.last_check)}</span>
         </div>
@@ -99,14 +123,16 @@ function WatchSheet({ w, onClose, onChanged }: { w: Watch | null; onClose: () =>
   };
 
   return (
-    <Sheet open={!!w} onClose={onClose} title={w && `${w.origin_label} → ${w.destination_label}`}>
+    <Sheet open={!!w} onClose={onClose} title={w && routeLabel(w)}>
       {w && (
         <div className="space-y-4">
           <div className="flex items-center gap-3">
             <AirlineLogo code={w.airline_code} name={w.airline} size={44} />
             <div className="min-w-0 flex-1">
               <div className="text-3xl font-extrabold tabular">{euro(w.last_price)}</div>
-              <div className="truncate text-sm text-muted">{w.airline || "Meilleur prix actuel"}</div>
+              <div className="truncate text-sm text-muted">
+                {w.bag_fee ? `billet ${euro(w.fare)} + valises ≈ ${euro(w.bag_fee)}` : w.airline || "Meilleur prix actuel"}
+              </div>
             </div>
             {w.level && <LevelBadge level={w.level} />}
           </div>
@@ -124,18 +150,46 @@ function WatchSheet({ w, onClose, onChanged }: { w: Watch | null; onClose: () =>
               <div className="font-bold tabular">{w.target ? euro(w.target) : "—"}</div>
             </div>
           </div>
+          {w.best_depart && (
+            <div className="rounded-3xl bg-white/5 p-4 ring-1 ring-white/8">
+              <div className="mb-2 text-[11px] font-medium text-muted">Meilleur billet trouvé · 1 passager</div>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <div className="text-[11px] text-muted">Aller</div>
+                  <div className="font-semibold">
+                    {dayMonth(w.best_depart)}
+                    {w.depart_time ? ` · ${w.depart_time}` : ""}
+                  </div>
+                </div>
+                {w.best_ret && (
+                  <div>
+                    <div className="text-[11px] text-muted">Retour</div>
+                    <div className="font-semibold">
+                      {dayMonth(w.best_ret)}
+                      {w.return_flight ? ` · ${w.return_flight.split(" · ")[0]}` : ""}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="mt-2 truncate text-xs text-muted">
+                {w.airline} · {w.stops === 0 ? "direct" : "1 escale max"}
+                {bagsLabel(w) ? ` · ${bagsLabel(w)}` : ""}
+              </div>
+              {flexLabel(w) && <div className="mt-1 text-[11px] text-faint">{flexLabel(w)} à chaque vérification</div>}
+            </div>
+          )}
           <div className="rounded-3xl bg-white/5 p-3 ring-1 ring-white/8">
             {hist === null ? <Skeleton className="h-40" /> : <LineChart series={[{ name: "Prix", color: "var(--color-accent-2)", points: hist }]} height={170} />}
           </div>
           <p className="text-xs text-muted">
-            {dayMonth(w.depart)}
-            {w.ret ? ` → ${dayMonth(w.ret)}` : " · aller simple"} · {w.stops === 0 ? "direct" : w.stops === 1 ? "1 escale max" : "toutes escales"}
-            {w.bags_out || w.bags_ret ? ` · valises ${w.bags_out}${w.ret ? `/${w.bags_ret}` : ""}` : ""} · vérifié {ago(w.last_check)}
+            Vérifié {ago(w.last_check)} · relevé toutes les heures
+            {w.shared ? " · notifications envoyées sur vos deux téléphones" : ""}
           </p>
+          {w.note && <p className="rounded-2xl bg-accent/10 px-3 py-2 text-xs leading-relaxed text-violet-100 ring-1 ring-accent/25">{w.note}</p>}
           <div className="grid grid-cols-2 gap-2">
             <div className="col-span-2">
               <LinkButton href={w.booking_url || w.google_url || "#"} primary>
-                Réserver · voir les offres
+                Réserver ce billet · comparer les sites
               </LinkButton>
             </div>
             <motion.button whileTap={{ scale: 0.97 }} onClick={check} disabled={!!busy} className="flex items-center justify-center gap-2 rounded-2xl bg-white/8 py-3 text-sm font-semibold ring-1 ring-white/10">
@@ -149,8 +203,8 @@ function WatchSheet({ w, onClose, onChanged }: { w: Watch | null; onClose: () =>
                   destination: w.destination,
                   originLabel: w.origin_label,
                   destinationLabel: w.destination_label,
-                  depart: w.depart,
-                  ret: w.ret,
+                  depart: w.best_depart || w.depart,
+                  ret: w.best_ret ?? w.ret,
                   stops: w.stops === 0 ? "0" : w.stops === 1 ? "1" : "any",
                   bagsOut: w.bags_out,
                   bagsRet: w.bags_ret,
@@ -167,9 +221,11 @@ function WatchSheet({ w, onClose, onChanged }: { w: Watch | null; onClose: () =>
                 </LinkButton>
               </div>
             )}
-            <motion.button whileTap={{ scale: 0.97 }} onClick={remove} disabled={!!busy} className="col-span-2 flex items-center justify-center gap-2 rounded-2xl py-3 text-sm font-semibold text-bad">
-              <Trash2 size={15} /> Supprimer l'alerte
-            </motion.button>
+            {!w.shared && (
+              <motion.button whileTap={{ scale: 0.97 }} onClick={remove} disabled={!!busy} className="col-span-2 flex items-center justify-center gap-2 rounded-2xl py-3 text-sm font-semibold text-bad">
+                <Trash2 size={15} /> Supprimer l'alerte
+              </motion.button>
+            )}
           </div>
         </div>
       )}
@@ -183,6 +239,8 @@ export default function AlertsScreen() {
   const [error, setError] = useState("");
   const openId = route.startsWith("/alertes/") ? route.split("/")[2] : null;
   const open = watches?.find((w) => w.id === openId) || null;
+  const shared = (watches || []).filter((w) => w.shared);
+  const mine = (watches || []).filter((w) => !w.shared);
 
   const load = useCallback(() => {
     api
@@ -205,7 +263,22 @@ export default function AlertsScreen() {
         <PushCard />
       </div>
 
-      <SectionTitle action={watches && watches.length > 0 && <Badge tone="accent">{watches.length}</Badge>}>Vols suivis</SectionTitle>
+      {shared.length > 0 && (
+        <>
+          <SectionTitle action={<Badge tone="accent">{shared.length}</Badge>}>Voyage · partagé</SectionTitle>
+          <div className="space-y-3">
+            {shared.map((w, i) => (
+              <WatchCard key={w.id} w={w} index={i} onOpen={() => go(`/alertes/${w.id}`)} />
+            ))}
+          </div>
+          <p className="mt-2 px-1 text-[11px] leading-relaxed text-faint">
+            Suivies pour vous deux : chacun réserve son propre billet (1 passager) avec le lien « Réserver ». Prix valises comprises : 1 valise 23 kg à
+            l'aller, 2 au retour.
+          </p>
+        </>
+      )}
+
+      <SectionTitle action={mine.length > 0 && <Badge tone="accent">{mine.length}</Badge>}>Mes alertes</SectionTitle>
       {error && <p className="text-sm text-bad">{error}</p>}
       {!watches && !error && (
         <div className="space-y-3">
@@ -213,7 +286,7 @@ export default function AlertsScreen() {
           <Skeleton className="h-28" />
         </div>
       )}
-      {watches?.length === 0 && (
+      {watches && mine.length === 0 && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass rounded-[28px] p-6 text-center">
           <div className="bg-gradient-accent mx-auto mb-4 grid size-14 place-items-center rounded-2xl">
             <BellRing size={24} />
@@ -227,7 +300,7 @@ export default function AlertsScreen() {
       )}
       <div className="space-y-3">
         <AnimatePresence>
-          {watches?.map((w, i) => (
+          {mine.map((w, i) => (
             <WatchCard key={w.id} w={w} index={i} onOpen={() => go(`/alertes/${w.id}`)} />
           ))}
         </AnimatePresence>

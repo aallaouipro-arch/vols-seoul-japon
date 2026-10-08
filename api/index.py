@@ -200,6 +200,27 @@ def create_watch(body: WatchIn):
     return store.get(f"watch:{w['id']}") or w
 
 
+class SharedWatchIn(WatchIn):
+    device: str = alerts.SHARED
+    depart_options: list[str] | None = None
+    ret_options: list[str] | None = None
+    note: str | None = None
+
+
+@app.post("/api/watches/shared")
+def create_shared_watch(body: SharedWatchIn, authorization: str | None = Header(None)):
+    """Alerte partagée : visible et notifiée sur tous les appareils (réservé à l'administrateur)."""
+    _secret(authorization)
+    data = body.model_dump()
+    data["origin"], data["destination"] = _code(body.origin), _code(body.destination)
+    for d in [body.depart, body.ret, *(body.depart_options or []), *(body.ret_options or [])]:
+        _date(d, "")
+    store = get_store()
+    w = alerts.create(store, alerts.SHARED, data)
+    _search(lambda: alerts.check(store, w))
+    return store.get(f"watch:{w['id']}")
+
+
 @app.delete("/api/watches/{watch_id}")
 def delete_watch(watch_id: str, device: str):
     if not alerts.delete(get_store(), _device(device), watch_id):
@@ -216,7 +237,7 @@ def watch_history(watch_id: str):
 def check_watch(watch_id: str, device: str):
     store = get_store()
     w = store.get(f"watch:{watch_id}")
-    if not w or w["device"] != _device(device):
+    if not w or (w["device"] != _device(device) and not w.get("shared")):
         raise HTTPException(404, "Alerte introuvable")
     _search(lambda: alerts.check(store, w))
     return store.get(f"watch:{watch_id}")

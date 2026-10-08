@@ -11,6 +11,7 @@ Usage :
 import argparse
 import json
 import logging
+import os
 import sys
 import time
 from datetime import datetime
@@ -194,13 +195,17 @@ def main():
             push(cfg, "⚠️ Tracker vols : relevé en échec", f"{errors} recherches en erreur.", priority=4)
         sys.exit(1)
 
-    if not args.no_booking:  # ces deux étapes passent par un navigateur
+    # Depuis les serveurs GitHub (États-Unis), Google renvoie des résultats différents de la France
+    # pour le billet unique (page qui ne charge pas) et pour plusieurs passagers (meilleurs vols
+    # absents) : ces deux contrôles ne tournent qu'en France, sinon ils donneraient de fausses alertes.
+    in_france = os.environ.get("GITHUB_ACTIONS") != "true"
+    if not args.no_booking and in_france:
         if single := single_ticket_combo(cfg, results):
             best["single_ticket"] = single
     winner = min(best.values(), key=lambda c: c["total"])
     if not args.no_booking:
         attach_booking_options(winner["legs"], cfg["currency"])  # prix site par site (compagnie, agences)
-    group = winner["group"] = check_travelers(cfg, winner, results)
+    group = winner["group"] = check_travelers(cfg, winner, results) if in_france else None
 
     for name, combo in best.items():
         db.save_combo(run_id, ts, name, combo["total"], combo)

@@ -13,10 +13,11 @@ Voyage (l'utilisateur + un ami, même voyage) : aller 21-23/07/2027, 1 semaine �
 - En ligne : `.github/workflows/tracker.yml` (GitHub Actions 4×/jour, TZ Europe/Paris, commit de `data/prices.db` + publication GitHub Pages). Secrets : `EMAIL_TO`, `SMTP_USER`, `SMTP_PASSWORD`.
 - En local (secours) : tâches planifiées Windows `VolsSeoulJapon-*` (`install_task.ps1`). Ne pas faire tourner local + GitHub en même temps (bases divergentes).
 - `tracker/gflights.py` : requête directe à Google Flights (cookie RGPD, `gl=FR`, plusieurs aéroports encodés à la main dans `tfs`), parsing de `payload[5]` = Price insights (fourchette `[4]`/`[5]`, historique ~60 j `[10][0]`). Le multi-destinations n'est pas rendu côté serveur → combinaisons d'allers simples / A/R (`tracker/plan.py`).
+- `tracker/booking.py` : page « Options de réservation » (prix du même billet par site : compagnie, Gotogate, Trip.com…) via Playwright/Chromium, pour les allers simples de la meilleure combinaison (`leg["booking"]`). Les A/R ne sont pas gérés (Google exige de choisir le retour). Le prix de la liste Google = déjà le minimum tous sites confondus.
 - `tracker/stats.py` : quand les prix baissent (jour de semaine via l'historique Google, heure via nos relevés).
 
 ## Accès direct Google Flights
-Serveur MCP `google-flights` (`mcp_server.py`, `.mcp.json`) : `search_flights` (valises comprises), `compare_stops`, `flexible_dates`, `trip_tracker_status`, `price_history`. À utiliser pour toute question de prix en temps réel.
+Serveur MCP `google-flights` (`mcp_server.py`, `.mcp.json`) : `search_flights` (valises comprises), `booking_options` (prix par site), `compare_stops`, `flexible_dates`, `trip_tracker_status`, `price_history`. À utiliser pour toute question de prix en temps réel.
 
 ## Données (SQLite `data/prices.db`)
 - `searches` : meilleur tarif (hors valises) par recherche et par relevé (`key` ex. `RT CDG+ORY-SEL 2027-07-21/2027-08-18`, `OW SEL-TYO 2027-07-29`).

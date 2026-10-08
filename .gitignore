@@ -3,3 +3,13 @@ __pycache__/
 data/*.log
 data/prices_v1_archive.db
 .claude/
+.env*
+data/app_store.json
+app/node_modules/
+app/dist/
+.vercel
+
+.vercel
+.env*
+.agents/
+skills-lock.json

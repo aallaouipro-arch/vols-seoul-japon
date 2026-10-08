@@ -13,7 +13,31 @@ import urllib.request
 from email.message import EmailMessage
 
 
+def app_push(title, message) -> bool:
+    """Notification dans l'appli Google Tracker (tous les appareils abonnés).
+    Variables d'environnement : APP_URL (ex. https://google-tracker.vercel.app) et APP_SECRET."""
+    url, secret = os.environ.get("APP_URL"), os.environ.get("APP_SECRET")
+    if not (url and secret):
+        return False
+    lines = [l.replace("**", "").strip() for l in message.splitlines() if l.strip()]
+    body = {"title": title, "body": " · ".join(lines[:2])[:220], "url": "/", "tag": "trip"}
+    req = urllib.request.Request(
+        url.rstrip("/") + "/api/broadcast",
+        data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {secret}"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return r.status == 200
+    except Exception as e:
+        print(f"[notify] échec notification appli : {e}")
+        return False
+
+
 def push(cfg, title, message, priority=3, tags=(), click=None) -> bool:
+    if priority >= 4:  # baisses, signal d'achat, pannes : aussi dans l'appli (pas le résumé du matin)
+        app_push(title, message)
     n = cfg["notify"]
     topic = os.environ.get("NTFY_TOPIC") or n.get("ntfy_topic")
     if not topic:

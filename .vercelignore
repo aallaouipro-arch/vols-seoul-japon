@@ -1,0 +1,12 @@
+data/
+site/
+scripts/
+.github/
+app/node_modules/
+app/dist/
+mcp_server.py
+run.py
+install_task.ps1
+config.json
+*.md
+.env*

@@ -4,39 +4,19 @@
 Cette page est remplie en JavaScript après le chargement : on passe par un vrai
 navigateur sans écran (Playwright + Chromium).
 - aller simple : URL de réservation construite directement à partir des n° de vol ;
-- aller-retour : Google exige de choisir le retour → le navigateur clique sur l'aller
-  retenu puis sur le retour le moins cher, comme on le ferait à la main.
+- aller-retour : le retour le moins cher pour l'aller retenu est trouvé côté serveur
+  (GoogleFlights.search_returns), puis l'URL de réservation est construite pour les deux vols.
 """
 
 import logging
 import re
-from base64 import urlsafe_b64encode
 
-from .gflights import CONSENT_COOKIE, _field, _varint
+from .gflights import CONSENT_COOKIE, GoogleFlights
+from .links import booking_url
 
 log = logging.getLogger("tracker")
 
-BOOKING_URL = "https://www.google.com/travel/flights/booking"
 PRICE_RE = re.compile(r"^(\d[\d\s  ]*)\s?€$")
-
-
-def _s(tag: int, text: str) -> bytes:
-    return _field(tag, text.encode())
-
-
-def booking_url(segments, currency="EUR", language="fr") -> str:
-    """URL de la page de réservation d'un vol (aller simple) à partir de ses segments
-    [(départ, date, arrivée, compagnie, n° de vol)]."""
-    date = segments[0][1]
-    leg = _s(0x12, date)
-    for frm, d, to, airline, num in segments:
-        leg += _field(0x22, _s(0x0A, frm) + _s(0x12, d) + _s(0x1A, to) + _s(0x2A, airline) + _s(0x32, num))
-    leg += _field(0x6A, b"\x08\x01" + _s(0x12, segments[0][0]))
-    leg += _field(0x72, b"\x08\x01" + _s(0x12, segments[-1][2]))
-    # 1=28, 2=2, vol, 8=adulte, 9=éco, 14=1, 19=aller simple (même en-tête que Google)
-    raw = b"\x08\x1c\x10\x02" + _field(0x1A, leg) + b"\x40\x01\x48\x01\x70\x01" + b"\x98\x01" + _varint(2)
-    tfs = urlsafe_b64encode(raw).decode().rstrip("=")
-    return f"{BOOKING_URL}?tfs={tfs}&hl={language}&gl=FR&curr={currency}"
 
 
 def parse_options(text: str) -> list[dict]:
@@ -76,8 +56,8 @@ class BookingBrowser:
         self._browser.close()
         self._pw.stop()
 
-    def options(self, segments, currency="EUR") -> tuple[list[dict], str]:
-        url = booking_url(segments, currency)
+    def read(self, url) -> list[dict]:
+        """Lit les prix par site sur une page de réservation Google Flights."""
         page = self._page
         page.goto(url, wait_until="domcontentloaded", timeout=45000)
         page.wait_for_function(
@@ -85,52 +65,11 @@ class BookingBrowser:
             " && document.body.innerText.includes('Réserver avec')",
             timeout=45000,
         )
-        return parse_options(page.inner_text("body")), url
+        return parse_options(page.inner_text("body"))
 
-    def _wait_booking(self):
-        page = self._page
-        page.wait_for_url("**/booking**", timeout=30000)
-        page.wait_for_function(
-            "() => !document.body.innerText.includes('Récupération des prix')"
-            " && document.body.innerText.includes('Réserver avec')",
-            timeout=45000,
-        )
-
-    def _items(self) -> list[tuple[int, int, list[str]]]:
-        """Lignes de résultats affichées : [(prix, index, lignes de texte)]."""
-        out = []
-        for i, tx in enumerate(self._page.locator("li.pIav2d").all_inner_texts()):
-            lines = [l.strip() for l in tx.replace("\xa0", " ").splitlines() if l.strip()]
-            price = next((int(re.sub(r"\D", "", l)) for l in lines if PRICE_RE.match(l)), None)
-            if price:
-                out.append((price, i, lines))
-        return out
-
-    def round_trip_options(self, search_url, depart, price) -> tuple[list[dict], str, str]:
-        """Aller-retour : clique l'aller retenu (heure de départ + prix), puis le retour le
-        moins cher. Renvoie (options par site, URL de réservation, description du retour)."""
-        page = self._page
-        page.goto(search_url, wait_until="domcontentloaded", timeout=45000)
-        page.wait_for_selector("li.pIav2d", timeout=45000)
-        page.wait_for_timeout(1500)
-        hhmm = depart[-5:]
-        items = self._items()
-        pick = next((i for p, i, ls in items if ls[0] == hhmm and p == price), None)
-        if pick is None:  # le prix a pu bouger de quelques euros entre les deux requêtes
-            pick = next((i for p, i, ls in items if ls[0] == hhmm), None)
-        if pick is None:
-            raise RuntimeError(f"vol aller {hhmm} introuvable dans la liste")
-        page.locator("li.pIav2d").nth(pick).click()
-        page.wait_for_function("() => /retour/i.test(document.body.innerText)", timeout=30000)
-        page.wait_for_timeout(2500)
-        returns = sorted(self._items())
-        if not returns:
-            raise RuntimeError("aucun vol retour affiché")
-        _, idx, lines = returns[0]
-        ret = f"retour {lines[0]} · {lines[3] if len(lines) > 3 else ''}".strip(" ·")
-        page.locator("li.pIav2d").nth(idx).click()
-        self._wait_booking()
-        return parse_options(page.inner_text("body")), page.url, ret
+    def options(self, segments, currency="EUR") -> tuple[list[dict], str]:
+        url = booking_url(segments, currency=currency)
+        return self.read(url), url
 
 
 def attach_booking_options(legs: list[dict], currency="EUR") -> None:
@@ -143,8 +82,15 @@ def attach_booking_options(legs: list[dict], currency="EUR") -> None:
             for leg in todo:
                 try:
                     if leg["search"].startswith("RT "):
-                        opts, url, ret = b.round_trip_options(leg["url"], leg["depart"], leg["fare"])
-                        leg["return_flight"] = ret
+                        # Retour choisi côté serveur (le moins cher pour cet aller), puis page de réservation
+                        rets = GoogleFlights(currency).search_returns(leg["query"], leg["segments"]).offers
+                        if not rets:
+                            raise RuntimeError("aucun vol retour pour cet aller")
+                        ret = min(rets, key=lambda o: o.price)
+                        leg["return_flight"] = f"retour {ret.depart[-5:]} · {', '.join(ret.airlines)}"
+                        leg["return_segments"] = ret.segments
+                        url = booking_url(leg["segments"], ret.segments, currency=currency)
+                        opts = b.read(url)
                     else:
                         opts, url = b.options(leg["segments"], currency)
                     leg["booking"], leg["booking_url"] = opts, url

@@ -40,6 +40,11 @@ class Offer:
     # (départ, date, arrivée, code compagnie, n° de vol) par segment : sert à ouvrir
     # la page "Options de réservation" de ce vol précis
     segments: list[tuple[str, str, str, str, str]] = field(default_factory=list)
+    layovers: list[tuple[str, int, str]] = field(default_factory=list)  # (aéroport, minutes, ville)
+
+    @property
+    def airline_code(self) -> str:
+        return self.segments[0][3] if self.segments else ""
 
 
 @dataclass
@@ -103,7 +108,18 @@ def _parse_offer(k) -> Offer | None:
         duration_min=f[9] or 0,
         stops=len(segs) - 1,
         segments=[_segment(sg) for sg in segs],
+        layovers=_layovers(f[13] if len(f) > 13 else None),
     )
+
+
+def _layovers(raw) -> list[tuple[str, int, str]]:
+    out = []
+    for l in raw or []:
+        try:
+            out.append((l[1], l[0] or 0, l[5] or l[4] or l[1]))
+        except (IndexError, TypeError):
+            continue
+    return out
 
 
 def _segment(sg) -> tuple[str, str, str, str, str]:
@@ -186,6 +202,23 @@ class GoogleFlights:
         url = f"https://www.google.com/travel/flights/search?tfs={tfs}&hl={self.language}&curr={self.currency}&gl=FR"
         return SearchResult(offers=offers, insights=insights, url=url)
 
+    def search_returns(self, legs, outbound_segments, max_stops: int | None = -1) -> SearchResult:
+        """Aller-retour, aller déjà choisi : renvoie les vols retour possibles.
+        Le prix de chaque offre est le prix TOTAL de l'aller-retour."""
+        tfs = _encode_tfs(
+            legs,
+            trip="round-trip",
+            adults=self.adults,
+            max_stops=self.max_stops if max_stops == -1 else max_stops,
+            selected=outbound_segments,
+        )
+        res = self.client.get(URL, params={"tfs": tfs, "hl": self.language, "curr": self.currency, "gl": "FR"})
+        if res.status_code != 200:
+            raise GoogleFlightsError(f"HTTP {res.status_code}")
+        offers, insights = parse_payload(res.text)
+        url = f"https://www.google.com/travel/flights/search?tfs={tfs}&hl={self.language}&curr={self.currency}&gl=FR"
+        return SearchResult(offers=offers, insights=insights, url=url)
+
 
 def _varint(n: int) -> bytes:
     out = bytearray()
@@ -201,10 +234,17 @@ def _field(tag: int, payload: bytes) -> bytes:
     return bytes([tag]) + _varint(len(payload)) + payload
 
 
-def _encode_tfs(legs, trip, adults, max_stops) -> str:
+def _segment_field(frm, date, to, airline, number) -> bytes:
+    """Vol précis (champ 4 d'un trajet) : utilisé pour « choisir » un aller ou réserver."""
+    enc = lambda tag, t: _field(tag, t.encode())  # noqa: E731
+    return _field(0x22, enc(0x0A, frm) + enc(0x12, date) + enc(0x1A, to) + enc(0x2A, airline) + enc(0x32, number))
+
+
+def _encode_tfs(legs, trip, adults, max_stops, selected=None) -> str:
     """Encode la requête `tfs`. Le protobuf de fast-flights n'accepte qu'un aéroport
     par champ, alors que Google en accepte plusieurs (champ répété) : on ajoute
-    les aéroports supplémentaires à la main (champ 13 = départ, 14 = arrivée)."""
+    les aéroports supplémentaires à la main (champ 13 = départ, 14 = arrivée).
+    `selected` : segments du vol aller déjà choisi (affiche alors les retours)."""
     q = create_query(
         flights=[FlightQuery(date=d, from_airport=a.split("+")[0], to_airport=b.split("+")[0]) for d, a, b in legs],
         trip=trip,
@@ -215,8 +255,9 @@ def _encode_tfs(legs, trip, adults, max_stops) -> str:
     flight_data = list(info.data)
     del info.data[:]
     raw = info.SerializeToString()
-    for fd, (_, a, b) in zip(flight_data, legs):
-        extra = b"".join(_field(0x6A, Airport(airport=x).SerializeToString()) for x in a.split("+")[1:])
+    for i, (fd, (_, a, b)) in enumerate(zip(flight_data, legs)):
+        extra = b"".join(_segment_field(*sg) for sg in selected) if (selected and i == 0) else b""
+        extra += b"".join(_field(0x6A, Airport(airport=x).SerializeToString()) for x in a.split("+")[1:])
         extra += b"".join(_field(0x72, Airport(airport=x).SerializeToString()) for x in b.split("+")[1:])
         raw += _field(0x1A, fd.SerializeToString() + extra)
     return b64encode(raw).decode()

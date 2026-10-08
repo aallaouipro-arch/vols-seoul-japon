@@ -1,0 +1,20 @@
+# Vérifie toutes les alertes de l'appli Google Tracker (n'importe quel vol) toutes les heures.
+# Le serveur Vercel relève les prix et envoie les notifications ; ici on ne fait que le déclencher.
+name: Alertes de l'appli
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Vérification des alertes
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          APP_SECRET: ${{ secrets.APP_SECRET }}
+        run: |
+          curl -sS --fail-with-body --max-time 90 -X POST "$APP_URL/api/cron/check" -H "Authorization: Bearer $APP_SECRET"

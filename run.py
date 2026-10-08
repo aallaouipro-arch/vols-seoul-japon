@@ -21,6 +21,7 @@ from zoneinfo import ZoneInfo
 from tracker.analyze import advise
 from tracker.booking import attach_booking_options, booking_summary
 from tracker.db import DB
+from tracker.export import write_trip_json
 from tracker.gflights import GoogleFlights
 from tracker.notify import email_recipients, push, send_email
 from tracker.plan import STRATEGIES, best_combos, build_followup_searches, build_searches, direct_vs_stop, key
@@ -211,7 +212,9 @@ def main():
 
     advice = advise(cfg, winner, results, db.best_combo_series(STRATEGIES), db.google_history(main_key(cfg)))
     dvs = direct_vs_stop(cfg, results)
-    build_site(ROOT / "site" / "index.html", cfg, advice, best, dvs, price_timing(db), db, datetime.now(PARIS))
+    timing, now = price_timing(db), datetime.now(PARIS)
+    build_site(ROOT / "site" / "index.html", cfg, advice, best, dvs, timing, db, now)
+    write_trip_json(ROOT / "site" / "trip.json", cfg, advice, best, dvs, timing, db, now, main_key(cfg))
     db.set_state("last_action", advice.action)
     summary = format_summary(advice, best, dvs, group)
     log.info("Résultat : %s %d € — %s", advice.action, advice.price, advice.reason)

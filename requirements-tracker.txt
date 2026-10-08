@@ -1,4 +1,4 @@
-fastapi
 fast-flights>=3.1
 typing_extensions
-pywebpush
+tzdata
+playwright

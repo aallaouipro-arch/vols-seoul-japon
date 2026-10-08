@@ -19,6 +19,15 @@ Voyage (l'utilisateur + un ami, même voyage, **chacun achète son billet**). Pl
 - `tracker/booking.py` : page « Options de réservation » (prix du même billet par site : compagnie, Gotogate, Trip.com…) via Playwright/Chromium, pour chaque vol de la meilleure combinaison (`leg["booking"]`) ; A/R : le navigateur clique l'aller retenu puis le retour le moins cher (`leg["return_flight"]`). Le prix de la liste Google = déjà le minimum tous sites confondus.
 - `tracker/stats.py` : quand les prix baissent (jour de semaine via l'historique Google, heure via nos relevés).
 
+## Appli Google Tracker (https://google-tracker-self.vercel.app)
+- `app/` : React + Vite + Tailwind 4 + Motion, PWA (`src/sw.ts` : hors ligne + push). Onglets Voyage (lit `/api/trip`), Rechercher, Alertes.
+- `api/index.py` : FastAPI en fonction Python Vercel (région `cdg1`) ; réutilise `tracker/` (gflights, links, alerts, store, webpush). Pas de Playwright côté Vercel.
+- `tracker/links.py` : URL de réservation Google (aller simple ET aller-retour, retour trouvé côté serveur via `GoogleFlights.search_returns`) + liens Trip.com/Kayak/Skyscanner.
+- `tracker/store.py` : Upstash Redis via REST (`KV_REST_API_URL/TOKEN`), fichier `data/app_store.json` en local.
+- Alertes : `tracker/alerts.py`, vérifiées toutes les heures par `.github/workflows/alerts.yml` → `/api/cron/check` (Bearer `CRON_SECRET`). Notif si baisse ≥ max(10 €, 3 %), cible atteinte ou niveau Google « bas ».
+- Le tracker du voyage pousse ses alertes dans l'appli via `/api/broadcast` (secrets GitHub `APP_URL`, `APP_SECRET`).
+- Déploiement : `vercel deploy --prod` depuis la racine (projet `google-tracker`, équipe Hobby). `requirements.txt` = API ; `requirements-tracker.txt` = tracker GitHub.
+
 ## Accès direct Google Flights
 Serveur MCP `google-flights` (`mcp_server.py`, `.mcp.json`) : `search_flights` (valises comprises), `booking_options` (prix par site), `compare_stops`, `flexible_dates`, `trip_tracker_status`, `price_history`. À utiliser pour toute question de prix en temps réel.
 

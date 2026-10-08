@@ -1,4 +1,32 @@
-# ✈️ Tracker de prix — Paris ↔ Séoul + Séoul ↔ Tokyo, été 2027
+# ✈️ Google Tracker — appli de suivi des prix des vols
+
+**Appli : https://google-tracker-self.vercel.app** (à installer sur l'écran d'accueil)
+
+- **Voyage** : Paris ⇄ Séoul ⇄ Tokyo, été 2027 (verdict, prix valises comprises, prix par site, historique).
+- **Rechercher** : n'importe quel vol en direct sur Google Flights, dates proches, choix du retour,
+  liens de réservation (page Google qui compare les sites : compagnie, Trip.com…, + Trip.com, Kayak, Skyscanner).
+- **Alertes** : n'importe quel vol, vérifié toutes les heures, notification à chaque vraie baisse.
+
+## Installer sur le téléphone
+- **iPhone** : ouvrir le lien dans **Safari** → Partager → **Sur l'écran d'accueil**, puis ouvrir l'appli depuis l'icône
+  et toucher « Activer » dans l'onglet Alertes (les notifications iPhone ne marchent que depuis l'appli installée).
+- **Android / Samsung** : ouvrir le lien dans Chrome → menu ⋮ → **Installer l'appli**, puis « Activer » les notifications.
+
+## Architecture
+| Partie | Où | Rôle |
+|---|---|---|
+| `app/` | Vercel (statique) | Appli React installable (PWA), notifications Web Push |
+| `api/index.py` | Vercel (Python, région Paris `cdg1`) | Recherche Google Flights en direct, alertes, envoi des notifications |
+| Upstash Redis (`google-tracker-db`, Francfort) | Vercel Marketplace | Alertes et abonnements aux notifications |
+| `run.py` + `.github/workflows/tracker.yml` | GitHub Actions, 4×/jour | Suivi du voyage → `site/trip.json` (GitHub Pages) lu par l'appli |
+| `.github/workflows/alerts.yml` | GitHub Actions, toutes les heures | Déclenche `POST /api/cron/check` |
+
+Secrets : Vercel (`VAPID_*`, `CRON_SECRET`, `KV_*` posés par l'intégration) ; GitHub (`APP_URL`, `APP_SECRET` = `CRON_SECRET`, e-mail).
+Développement local : `uvicorn api.index:app --port 8787` + `cd app && npm run dev`. Mise en ligne : `vercel deploy --prod`.
+
+---
+
+# Tracker du voyage — Paris ↔ Séoul + Séoul ↔ Tokyo, été 2027
 
 Surveille Google Flights 4 fois par jour, publie un **site à partager**, envoie les petites baisses sur l'appli **ntfy** et **un seul e-mail** quand c'est le moment d'acheter.
 

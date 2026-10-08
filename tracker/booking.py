@@ -2,8 +2,10 @@
 (compagnie, Trip.com, Gotogate, Opodo…).
 
 Cette page est remplie en JavaScript après le chargement : on passe par un vrai
-navigateur sans écran (Playwright + Chromium). Seuls les allers simples sont
-gérés : pour un aller-retour, Google demande d'abord de choisir le vol retour.
+navigateur sans écran (Playwright + Chromium).
+- aller simple : URL de réservation construite directement à partir des n° de vol ;
+- aller-retour : Google exige de choisir le retour → le navigateur clique sur l'aller
+  retenu puis sur le retour le moins cher, comme on le ferait à la main.
 """
 
 import logging
@@ -85,17 +87,66 @@ class BookingBrowser:
         )
         return parse_options(page.inner_text("body")), url
 
+    def _wait_booking(self):
+        page = self._page
+        page.wait_for_url("**/booking**", timeout=30000)
+        page.wait_for_function(
+            "() => !document.body.innerText.includes('Récupération des prix')"
+            " && document.body.innerText.includes('Réserver avec')",
+            timeout=45000,
+        )
+
+    def _items(self) -> list[tuple[int, int, list[str]]]:
+        """Lignes de résultats affichées : [(prix, index, lignes de texte)]."""
+        out = []
+        for i, tx in enumerate(self._page.locator("li.pIav2d").all_inner_texts()):
+            lines = [l.strip() for l in tx.replace("\xa0", " ").splitlines() if l.strip()]
+            price = next((int(re.sub(r"\D", "", l)) for l in lines if PRICE_RE.match(l)), None)
+            if price:
+                out.append((price, i, lines))
+        return out
+
+    def round_trip_options(self, search_url, depart, price) -> tuple[list[dict], str, str]:
+        """Aller-retour : clique l'aller retenu (heure de départ + prix), puis le retour le
+        moins cher. Renvoie (options par site, URL de réservation, description du retour)."""
+        page = self._page
+        page.goto(search_url, wait_until="domcontentloaded", timeout=45000)
+        page.wait_for_selector("li.pIav2d", timeout=45000)
+        page.wait_for_timeout(1500)
+        hhmm = depart[-5:]
+        items = self._items()
+        pick = next((i for p, i, ls in items if ls[0] == hhmm and p == price), None)
+        if pick is None:  # le prix a pu bouger de quelques euros entre les deux requêtes
+            pick = next((i for p, i, ls in items if ls[0] == hhmm), None)
+        if pick is None:
+            raise RuntimeError(f"vol aller {hhmm} introuvable dans la liste")
+        page.locator("li.pIav2d").nth(pick).click()
+        page.wait_for_function("() => /retour/i.test(document.body.innerText)", timeout=30000)
+        page.wait_for_timeout(2500)
+        returns = sorted(self._items())
+        if not returns:
+            raise RuntimeError("aucun vol retour affiché")
+        _, idx, lines = returns[0]
+        ret = f"retour {lines[0]} · {lines[3] if len(lines) > 3 else ''}".strip(" ·")
+        page.locator("li.pIav2d").nth(idx).click()
+        self._wait_booking()
+        return parse_options(page.inner_text("body")), page.url, ret
+
 
 def attach_booking_options(legs: list[dict], currency="EUR") -> None:
-    """Ajoute leg["booking"] (prix par site) aux allers simples de la combinaison."""
-    todo = [l for l in legs if l["search"].startswith("OW ") and l.get("segments")]
+    """Ajoute leg["booking"] (prix par site) à chaque vol de la combinaison."""
+    todo = [l for l in legs if l.get("segments")]
     if not todo:
         return
     try:
         with BookingBrowser() as b:
             for leg in todo:
                 try:
-                    opts, url = b.options(leg["segments"], currency)
+                    if leg["search"].startswith("RT "):
+                        opts, url, ret = b.round_trip_options(leg["url"], leg["depart"], leg["fare"])
+                        leg["return_flight"] = ret
+                    else:
+                        opts, url = b.options(leg["segments"], currency)
                     leg["booking"], leg["booking_url"] = opts, url
                     log.info("Options de réservation %s : %s", leg["search"],
                              ", ".join(f"{o['site']} {o['price']} €" for o in opts[:4]) or "aucune")
@@ -122,89 +173,8 @@ def booking_summary(leg: dict) -> str:
         if same:
             parts.append(f"{same} autre{'s' if same > 1 else ''} site{'s' if same > 1 else ''} au même prix")
         if dearer:
-            parts.append(f"{len(dearer)} agence{'s' if len(dearer) > 1 else ''} plus chère{'s' if len(dearer) > 1 else ''} (dès {dearer[0]['price']} €)")
+            n = len(dearer)
+            what = "agence" if not any(o["airline"] for o in dearer) else "offre"
+            parts.append(f"{n} {what}{'s' if n > 1 else ''} plus chère{'s' if n > 1 else ''} (dès {dearer[0]['price']} €)")
     return " · ".join(parts)
 
-
-# --- Billet unique multi-destinations (rendu en JavaScript, donc via le navigateur) ---
-
-def multicity_url(legs, adults=1, max_stops=1, currency="EUR") -> str:
-    from .gflights import _encode_tfs
-
-    tfs = _encode_tfs(legs, trip="multi-city", adults=adults, max_stops=max_stops)
-    return f"https://www.google.com/travel/flights/search?tfs={tfs}&hl=fr&gl=FR&curr={currency}"
-
-
-def _parse_result_item(text: str) -> dict | None:
-    """Texte d'une ligne de résultat Google Flights → {price, airlines, route, depart_time, duration, stops}."""
-    lines = [l.strip() for l in text.replace("\xa0", " ").splitlines() if l.strip()]
-    price = next((int(re.sub(r"\D", "", l)) for l in lines if PRICE_RE.match(l)), None)
-    if price is None or len(lines) < 7:
-        return None
-    return {
-        "price": price,
-        "airlines": lines[3],
-        "duration": lines[4],
-        "route": lines[5],
-        "stops": 0 if lines[6].lower().startswith("sans escale") else int(re.sub(r"\D", "", lines[6]) or 1),
-        "depart_time": lines[0],
-    }
-
-
-def _browser_search(b, url) -> list[dict]:
-    page = b._page
-    page.goto(url, wait_until="domcontentloaded", timeout=45000)
-    page.wait_for_selector("li.pIav2d", timeout=45000)
-    page.wait_for_timeout(1500)  # la liste se complète après le premier rendu
-    items = [_parse_result_item(t) for t in page.locator("li.pIav2d").all_inner_texts()]
-    return sorted((i for i in items if i), key=lambda i: i["price"])
-
-
-def single_ticket_combo(cfg, results) -> dict | None:
-    """Meilleur montage "billet unique" : Paris→Séoul + Japon→Paris sur UN billet
-    (multi-destinations), + Séoul→Japon séparé. Aux dates du meilleur A/R."""
-    from .bags import bag_cost
-    from .plan import _leg, _plan, best_rt_pair
-
-    pair = best_rt_pair(cfg, results)
-    if pair is None:
-        return None
-    o, r = pair
-    P, S = cfg["origin"], cfg["seoul"]
-    bags = [cfg["bags"]["outbound"], cfg["bags"]["return"]]
-    best = None
-    try:
-        with BookingBrowser() as b:
-            for j in cfg["japan_cities"]:
-                legs = [(o, P, S), (r, j, P)]
-                url = multicity_url(legs, max_stops=cfg.get("max_stops", 1), currency=cfg["currency"])
-                try:
-                    items = _browser_search(b, url)
-                except Exception as e:
-                    log.warning("Billet unique %s→%s / %s→%s indisponible : %s", P, S, j, P, e)
-                    continue
-                if not items:
-                    continue
-                priced = []
-                for it in items:
-                    extra, note = bag_cost([it["airlines"]], 12 * 60, bags)
-                    priced.append((it["price"] + extra, extra, note, it))
-                total, extra, note, it = min(priced, key=lambda t: t[0])
-                ticket = {
-                    "search": f"MC {P}-{S} {o} + {j}-{P} {r}",
-                    "price": total, "fare": it["price"], "bag_fee": extra, "bag_note": note, "bags": bags,
-                    "airlines": it["airlines"], "route": f"{it['route']} … {j}→Paris",
-                    "depart": f"{o} {it['depart_time']}", "arrive": "", "stops": it["stops"],
-                    "duration_min": 0, "url": url, "total": total, "segments": [],
-                }
-                hop = _leg(results, *_plan(cfg)["seoul_japan"](j))
-                if hop is None:
-                    continue
-                combo = {"total": ticket["price"] + hop["price"], "legs": [ticket, hop]}
-                log.info("Billet unique via %s : %d € (billet %d € + valises %d €) + Séoul→Japon %d €",
-                         j, combo["total"], it["price"], extra, hop["price"])
-                if best is None or combo["total"] < best["total"]:
-                    best = combo
-    except Exception as e:
-        log.warning("Navigateur indisponible, pas de billet unique : %s", e)
-    return best

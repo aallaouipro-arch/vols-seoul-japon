@@ -1,6 +1,9 @@
-# Tracker de prix de vols — Paris (CDG/ORY) → Séoul → Japon → Paris (été 2027)
+# Tracker de prix de vols — Paris (CDG/ORY) ↔ Séoul + Séoul ↔ Tokyo (été 2027)
 
-Voyage (l'utilisateur + un ami, même voyage) : aller 21-23/07/2027, 1 semaine à Séoul, ~3 semaines au Japon, retour 18-20/08/2027. Éco, EUR.
+Voyage (l'utilisateur + un ami, même voyage, **chacun achète son billet**). Plan = **2 allers-retours** :
+- A/R Paris (CDG/ORY) ↔ Séoul : aller 21-23/07/2027, **retour en France depuis Séoul** 18-20/08/2027 ;
+- A/R Séoul ↔ Tokyo : aller 28-30/07, retour à Séoul 16-17/08 (toujours avant le vol pour Paris).
+Éco, EUR, 1 passager par billet (`travelers: 1`).
 
 ## Contraintes de l'utilisateur (à respecter partout)
 - Départ et retour **uniquement CDG ou Orly** → code `CDG+ORY` (jamais `PAR`, qui inclut Beauvais).
@@ -9,11 +12,11 @@ Voyage (l'utilisateur + un ami, même voyage) : aller 21-23/07/2027, 1 semaine �
 - E-mail : **un seul**, au signal d'achat (`state.buy_email_sent` dans la base). Les baisses passent par l'appli ntfy, jamais par e-mail.
 
 ## Fonctionnement
-- `run.py` : ~37 recherches Google Flights → meilleure combinaison par stratégie (`open_jaw`, `rt_seoul`, `rt_tokyo`) → avis ACHETER / SURVEILLER / ATTENDRE → `site/index.html` (site partageable, données incluses) → notifications.
+- `run.py` : ~37 recherches Google Flights → meilleure combinaison par stratégie (`two_rt` = le plan, `rt_two_ow` = Séoul↔Tokyo en 2 allers simples, pour comparaison) → avis ACHETER / SURVEILLER / ATTENDRE → `site/index.html` (site partageable, données incluses) → notifications.
 - En ligne : `.github/workflows/tracker.yml` (GitHub Actions 4×/jour, TZ Europe/Paris, commit de `data/prices.db` + publication GitHub Pages). Secrets : `EMAIL_TO`, `SMTP_USER`, `SMTP_PASSWORD`.
 - En local (secours) : tâches planifiées Windows `VolsSeoulJapon-*` (`install_task.ps1`). Ne pas faire tourner local + GitHub en même temps (bases divergentes).
 - `tracker/gflights.py` : requête directe à Google Flights (cookie RGPD, `gl=FR`, plusieurs aéroports encodés à la main dans `tfs`), parsing de `payload[5]` = Price insights (fourchette `[4]`/`[5]`, historique ~60 j `[10][0]`). Le multi-destinations n'est pas rendu côté serveur → combinaisons d'allers simples / A/R (`tracker/plan.py`).
-- `tracker/booking.py` : page « Options de réservation » (prix du même billet par site : compagnie, Gotogate, Trip.com…) via Playwright/Chromium, pour les allers simples de la meilleure combinaison (`leg["booking"]`). Les A/R ne sont pas gérés (Google exige de choisir le retour). Le prix de la liste Google = déjà le minimum tous sites confondus.
+- `tracker/booking.py` : page « Options de réservation » (prix du même billet par site : compagnie, Gotogate, Trip.com…) via Playwright/Chromium, pour chaque vol de la meilleure combinaison (`leg["booking"]`) ; A/R : le navigateur clique l'aller retenu puis le retour le moins cher (`leg["return_flight"]`). Le prix de la liste Google = déjà le minimum tous sites confondus.
 - `tracker/stats.py` : quand les prix baissent (jour de semaine via l'historique Google, heure via nos relevés).
 
 ## Accès direct Google Flights
@@ -24,6 +27,7 @@ Serveur MCP `google-flights` (`mcp_server.py`, `.mcp.json`) : `search_flights` (
 - `combos` : meilleur total (valises comprises) par stratégie et par relevé, détail JSON des vols.
 - `google_history` : historique quotidien fourni par Google, par recherche.
 - `state` : `last_action`, `buy_email_sent`.
+- Historique filtré sur les stratégies actuelles (`best_combo_series(STRATEGIES)`) : les anciens plans (`open_jaw`, `rt_seoul`, `rt_tokyo`, retour depuis le Japon) restent en base mais ne sont pas comparables.
 - `data/prices_v1_archive.db` : ancienne base (aéroport PAR, sans valises), non comparable.
 
 ## Quand l'utilisateur demande "où en sont les prix ?"

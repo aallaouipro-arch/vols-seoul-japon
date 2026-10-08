@@ -149,7 +149,12 @@ def trip_tracker_status() -> str:
         lines.append(f"\n### {r['strategy']} : {r['total']} €")
         for l in json.loads(r["details"])["legs"]:
             lines.append(f"- {l['search']} : {l['price']} € · {l['airlines']} · {l['route']} · {l['url']}")
-    series = conn.execute("SELECT ts, MIN(total) t FROM combos GROUP BY run_id ORDER BY ts").fetchall()
+    from tracker.plan import STRATEGIES
+
+    marks = ",".join("?" * len(STRATEGIES))
+    series = conn.execute(
+        f"SELECT ts, MIN(total) t FROM combos WHERE strategy IN ({marks}) GROUP BY run_id ORDER BY ts", list(STRATEGIES)
+    ).fetchall()
     lines.append("\nÉvolution du meilleur total : " + ", ".join(f"{s['ts'][:16]} {s['t']} €" for s in series[-15:]))
     return "\n".join(lines)
 

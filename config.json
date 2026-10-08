@@ -1,18 +1,18 @@
 {
-  "trip_name": "Séoul + Japon — été 2027",
+  "trip_name": "Paris ↔ Séoul + Séoul ↔ Tokyo — été 2027",
   "currency": "EUR",
   "language": "fr",
   "adults": 1,
-  "travelers": 2,
+  "travelers": 1,
 
   "origin": "CDG+ORY",
   "seoul": "SEL",
-  "japan_cities": ["TYO", "OSA"],
+  "tokyo": "TYO",
 
   "outbound_dates": ["2027-07-21", "2027-07-22", "2027-07-23"],
   "return_dates": ["2027-08-18", "2027-08-19", "2027-08-20"],
-  "seoul_to_japan_date": "2027-07-29",
-  "japan_to_seoul_date": "2027-08-17",
+  "seoul_to_tokyo_dates": ["2027-07-28", "2027-07-29", "2027-07-30"],
+  "tokyo_to_seoul_dates": ["2027-08-16", "2027-08-17"],
 
   "max_stops": 1,
   "bags": { "outbound": 1, "return": 2 },

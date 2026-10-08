@@ -1,28 +1,24 @@
 """Définit les recherches à lancer et combine les résultats en itinéraires complets.
 
-Itinéraire voulu : Paris (CDG/ORY) → Séoul (1 semaine) → Japon (~3 semaines) → Paris (CDG/ORY).
-Google Flights ne renvoie pas les résultats "multi-destinations" côté serveur,
-donc on reconstitue le voyage à partir d'allers simples et d'allers-retours.
+Plan de l'utilisateur (chacun achète son billet, 1 personne) :
+- billet 1 : aller-retour Paris (CDG/ORY) ↔ Séoul, le retour en France part de Séoul ;
+- billet 2 : aller-retour Séoul ↔ Tokyo, retour à Séoul avant le vol pour Paris.
 
 Leviers de prix pris en compte :
 - 1 escale max (≈ 250 € de moins que le direct Paris↔Séoul) ;
 - dates flexibles, dont des départs mardi/mercredi (en moyenne moins chers) ;
-- vols simples combinés (open-jaw) vs aller-retour ;
-- valises : chaque vol est comparé valises comprises (ex. 1×23 kg à l'aller,
-  2×23 kg au retour), ce qui avantage les compagnies qui les incluent (JAL…).
+- Séoul↔Tokyo en aller-retour ou en 2 allers simples (souvent identique chez les low-cost) ;
+- valises : chaque vol est comparé valises comprises (1×23 kg à l'aller, 2×23 kg au retour).
 """
 
 from dataclasses import dataclass, field
-from datetime import date, timedelta
 from itertools import product
 
 from .bags import bag_cost
 
 STRATEGIES = {
-    "open_jaw": "3 allers simples : Paris→Séoul, Séoul→Japon, Japon→Paris",
-    "rt_seoul": "A/R Paris↔Séoul + Séoul→Japon + Japon→Séoul",
-    "rt_tokyo": "A/R Paris↔Tokyo + crochet Tokyo→Séoul→Japon",
-    "single_ticket": "Billet unique Paris→Séoul / Japon→Paris + Séoul→Japon",
+    "two_rt": "A/R Paris↔Séoul + A/R Séoul↔Tokyo",
+    "rt_two_ow": "A/R Paris↔Séoul + Séoul↔Tokyo en 2 allers simples",
 }
 
 
@@ -46,38 +42,35 @@ def key(legs, direct=False) -> str:
     return f"RT {a}-{b} {d1}/{d2}{suffix}"
 
 
-def _next_day(d: str) -> str:
-    return (date.fromisoformat(d) + timedelta(days=1)).isoformat()
-
-
 def _plan(cfg):
-    """Toutes les briques de voyage possibles : {nom: [(legs, bags)]} indexées par dates."""
-    P, S, J = cfg["origin"], cfg["seoul"], cfg["japan_cities"]
-    s2j, j2s = cfg["seoul_to_japan_date"], cfg["japan_to_seoul_date"]
+    """Briques de voyage : nom → fonction(dates) → (legs, valises par sens)."""
+    P, S, T = cfg["origin"], cfg["seoul"], cfg["tokyo"]
     b_out, b_ret = cfg["bags"]["outbound"], cfg["bags"]["return"]
     return {
-        "out_ow": lambda o: ([(o, P, S)], [b_out]),
-        "seoul_japan": lambda j: ([(s2j, S, j)], [b_out]),
-        "japan_home": lambda j, r: ([(r, j, P)], [b_ret]),
-        "rt_seoul": lambda o, r: ([(o, P, S), (r, S, P)], [b_out, b_ret]),
-        "japan_seoul": lambda j: ([(j2s, j, S)], [b_ret]),
-        "rt_tokyo": lambda o, r: ([(o, P, "TYO"), (r, "TYO", P)], [b_out, b_ret]),
-        "tokyo_seoul": lambda o: ([(_next_day(o), "TYO", S)], [b_out]),
+        "rt_paris": lambda o, r: ([(o, P, S), (r, S, P)], [b_out, b_ret]),
+        "rt_tokyo": lambda go, back: ([(go, S, T), (back, T, S)], [b_out, b_ret]),
+        "ow_to_tokyo": lambda go: ([(go, S, T)], [b_out]),
+        "ow_from_tokyo": lambda back: ([(back, T, S)], [b_ret]),
     }
+
+
+def _tokyo_pairs(cfg, paris_return=None):
+    """(aller, retour) Séoul↔Tokyo, retour à Séoul avant le vol pour Paris."""
+    return [
+        (go, back)
+        for go, back in product(cfg["seoul_to_tokyo_dates"], cfg["tokyo_to_seoul_dates"])
+        if paris_return is None or back < paris_return
+    ]
 
 
 def build_searches(cfg) -> list[Search]:
     """Recherches lancées à chaque relevé."""
-    J, outs, rets = cfg["japan_cities"], cfg["outbound_dates"], cfg["return_dates"]
     p = _plan(cfg)
     bricks = (
-        [p["out_ow"](o) for o in outs]
-        + [p["seoul_japan"](j) for j in J]
-        + [p["japan_home"](j, r) for j, r in product(J, rets)]
-        + [p["rt_seoul"](o, r) for o, r in product(outs, rets)]
-        + [p["japan_seoul"](j) for j in J]
-        + [p["rt_tokyo"](o, r) for o, r in product(outs, rets)]
-        + [p["tokyo_seoul"](o) for o in outs]
+        [p["rt_paris"](o, r) for o, r in product(cfg["outbound_dates"], cfg["return_dates"])]
+        + [p["rt_tokyo"](go, back) for go, back in _tokyo_pairs(cfg)]
+        + [p["ow_to_tokyo"](go) for go in cfg["seoul_to_tokyo_dates"]]
+        + [p["ow_from_tokyo"](back) for back in cfg["tokyo_to_seoul_dates"]]
     )
     seen = {}
     for legs, bags in bricks:
@@ -91,7 +84,7 @@ def best_rt_pair(cfg, results) -> tuple[str, str] | None:
     p = _plan(cfg)
     pairs = []
     for o, r in product(cfg["outbound_dates"], cfg["return_dates"]):
-        leg = _leg(results, *p["rt_seoul"](o, r))
+        leg = _leg(results, *p["rt_paris"](o, r))
         if leg:
             pairs.append((leg["total"], o, r))
     return min(pairs)[1:] if pairs else None
@@ -102,7 +95,7 @@ def build_followup_searches(cfg, results) -> list[Search]:
     pair = best_rt_pair(cfg, results)
     if pair is None:
         return []
-    legs, bags = _plan(cfg)["rt_seoul"](*pair)
+    legs, bags = _plan(cfg)["rt_paris"](*pair)
     return [Search(legs, bags, max_stops=0)]
 
 
@@ -139,23 +132,15 @@ def _leg(results, legs, bags, direct=False):
 
 def best_combos(cfg, results) -> dict[str, dict]:
     """Pour chaque stratégie, la combinaison la moins chère : {strategy: {total, legs}}."""
-    J, outs, rets = cfg["japan_cities"], cfg["outbound_dates"], cfg["return_dates"]
     p = _plan(cfg)
     L = lambda brick: _leg(results, *brick)  # noqa: E731
 
     candidates = {name: [] for name in STRATEGIES}
-    for o, r in product(outs, rets):
-        for j_in, j_out in product(J, J):
-            candidates["open_jaw"].append(
-                [L(p["out_ow"](o)), L(p["seoul_japan"](j_in)), L(p["japan_home"](j_out, r))]
-            )
-            candidates["rt_seoul"].append(
-                [L(p["rt_seoul"](o, r)), L(p["seoul_japan"](j_in)), L(p["japan_seoul"](j_out))]
-            )
-        for j_in in J:
-            candidates["rt_tokyo"].append(
-                [L(p["rt_tokyo"](o, r)), L(p["tokyo_seoul"](o)), L(p["seoul_japan"](j_in))]
-            )
+    for o, r in product(cfg["outbound_dates"], cfg["return_dates"]):
+        for go, back in _tokyo_pairs(cfg, paris_return=r):
+            paris = L(p["rt_paris"](o, r))
+            candidates["two_rt"].append([paris, L(p["rt_tokyo"](go, back))])
+            candidates["rt_two_ow"].append([paris, L(p["ow_to_tokyo"](go)), L(p["ow_from_tokyo"](back))])
 
     best = {}
     for name, combos in candidates.items():
@@ -171,7 +156,7 @@ def direct_vs_stop(cfg, results) -> dict | None:
     pair = best_rt_pair(cfg, results)
     if pair is None:
         return None
-    legs, bags = _plan(cfg)["rt_seoul"](*pair)
+    legs, bags = _plan(cfg)["rt_paris"](*pair)
     stop, direct = _leg(results, legs, bags), _leg(results, legs, bags, direct=True)
     if not (stop and direct):
         return None

@@ -88,10 +88,13 @@ class DB:
         )
         self.conn.commit()
 
-    def best_combo_series(self) -> list[tuple[str, int]]:
-        """Meilleur total (toutes stratégies) par run."""
+    def best_combo_series(self, strategies) -> list[tuple[str, int]]:
+        """Meilleur total par run, parmi les stratégies données (celles du plan actuel :
+        l'historique d'un ancien itinéraire n'est pas comparable)."""
+        marks = ",".join("?" * len(strategies))
         rows = self.conn.execute(
-            "SELECT ts, MIN(total) AS total FROM combos GROUP BY run_id ORDER BY ts"
+            f"SELECT ts, MIN(total) AS total FROM combos WHERE strategy IN ({marks}) GROUP BY run_id ORDER BY ts",
+            list(strategies),
         ).fetchall()
         return [(r["ts"], r["total"]) for r in rows]
 

@@ -1,8 +1,12 @@
-# ✈️ Tracker de prix — Paris (CDG/Orly) → Séoul → Japon → Paris, été 2027
+# ✈️ Tracker de prix — Paris ↔ Séoul + Séoul ↔ Tokyo, été 2027
 
 Surveille Google Flights 4 fois par jour, publie un **site à partager**, envoie les petites baisses sur l'appli **ntfy** et **un seul e-mail** quand c'est le moment d'acheter.
 
-Conditions suivies : départ/retour CDG ou Orly · 1 escale max · 1 valise 23 kg à l'aller, 2 au retour (prix comparés valises comprises) · aller 21/22/23 juillet, retour 18/19/20 août 2027.
+Plan suivi (chacun achète son billet) :
+- **A/R Paris (CDG/Orly) ↔ Séoul** : aller 21/22/23 juillet, retour depuis Séoul 18/19/20 août 2027 ;
+- **A/R Séoul ↔ Tokyo** : aller 28/29/30 juillet, retour à Séoul 16/17 août.
+
+1 escale max · 1 valise 23 kg à l'aller, 2 au retour (prix comparés valises comprises) · prix du même billet site par site (compagnie, agences).
 
 ## Mise en ligne (une seule fois, ~10 min)
 1. Créer un compte gratuit sur https://github.com puis un dépôt **public** vide (ex. `vols-seoul-japon`), sans README.

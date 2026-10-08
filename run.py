@@ -19,7 +19,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from tracker.analyze import advise
-from tracker.booking import attach_booking_options, booking_summary, single_ticket_combo
+from tracker.booking import attach_booking_options, booking_summary
 from tracker.db import DB
 from tracker.gflights import GoogleFlights
 from tracker.notify import email_recipients, push, send_email
@@ -130,6 +130,8 @@ def format_summary(advice, best, dvs=None, group=None) -> str:
             stops = "direct" if l["stops"] == 0 else f"{l['stops']} escale"
             bags = f"+{l['bag_fee']} € valises" if l["bag_fee"] else "valises incluses"
             lines.append(f"   - {l['search']} : {l['price']} € ({l['airlines']}, {l['route']}, {stops}, {bags})")
+            if l.get("return_flight"):
+                lines.append(f"     {l['return_flight']}")
             if l.get("booking"):
                 lines.append(f"     où réserver : {booking_summary(l)}")
     return "\n".join(lines)
@@ -138,6 +140,7 @@ def format_summary(advice, best, dvs=None, group=None) -> str:
 def buy_email(cfg, advice, winner, site_url):
     legs = "\n".join(
         f"  - {l['search']} : {l['price']} € ({l['airlines']}, {l['route']}, départ {l['depart']})\n"
+        + (f"    {l['return_flight']}\n" if l.get("return_flight") else "")
         + (f"    Où réserver : {booking_summary(l)}\n" if l.get("booking") else "")
         + f"    {l.get('booking_url') or l['url']}"
         for l in winner["legs"]
@@ -182,7 +185,7 @@ def main():
         return
 
     db = DB(DATA / "prices.db")
-    history = db.best_combo_series()
+    history = db.best_combo_series(STRATEGIES)
     previous_min = min((t for _, t in history), default=None)
     previous_price = history[-1][1] if history else None
     previous_action = db.get_state("last_action")
@@ -195,13 +198,9 @@ def main():
             push(cfg, "⚠️ Tracker vols : relevé en échec", f"{errors} recherches en erreur.", priority=4)
         sys.exit(1)
 
-    # Depuis les serveurs GitHub (États-Unis), Google renvoie des résultats différents de la France
-    # pour le billet unique (page qui ne charge pas) et pour plusieurs passagers (meilleurs vols
-    # absents) : ces deux contrôles ne tournent qu'en France, sinon ils donneraient de fausses alertes.
+    # Depuis les serveurs GitHub (États-Unis), Google renvoie d'autres résultats pour plusieurs
+    # passagers (meilleurs vols absents) : ce contrôle ne tourne qu'en France (fausses alertes sinon).
     in_france = os.environ.get("GITHUB_ACTIONS") != "true"
-    if not args.no_booking and in_france:
-        if single := single_ticket_combo(cfg, results):
-            best["single_ticket"] = single
     winner = min(best.values(), key=lambda c: c["total"])
     if not args.no_booking:
         attach_booking_options(winner["legs"], cfg["currency"])  # prix site par site (compagnie, agences)
@@ -210,7 +209,7 @@ def main():
     for name, combo in best.items():
         db.save_combo(run_id, ts, name, combo["total"], combo)
 
-    advice = advise(cfg, winner, results, db.best_combo_series(), db.google_history(main_key(cfg)))
+    advice = advise(cfg, winner, results, db.best_combo_series(STRATEGIES), db.google_history(main_key(cfg)))
     dvs = direct_vs_stop(cfg, results)
     build_site(ROOT / "site" / "index.html", cfg, advice, best, dvs, price_timing(db), db, datetime.now(PARIS))
     db.set_state("last_action", advice.action)

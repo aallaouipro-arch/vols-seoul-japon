@@ -35,7 +35,8 @@ def _booking_row(l) -> str:
         for i, o in enumerate(opts[:6])
     )
     link = f' <a href="{_e(l["booking_url"])}" target="_blank" rel="noopener">voir</a>' if l.get("booking_url") else ""
-    return f'<tr class="booking"><td colspan="6"><small>Où réserver (billet seul) :</small> {chips}{link}</td></tr>'
+    ret = f'<small>{_e(l["return_flight"])} · </small>' if l.get("return_flight") else ""
+    return f'<tr class="booking"><td colspan="6">{ret}<small>Où réserver (billet seul) :</small> {chips}{link}</td></tr>'
 
 
 def _group_kpi(best) -> str:

@@ -7,11 +7,13 @@ aux IP européennes, ni les "Price insights" (fourchette habituelle + historique
 
 import json
 import logging
+import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from base64 import b64encode
+from urllib.parse import urlencode
 
 from fast_flights import FlightQuery, Passengers, create_query
 from fast_flights.pb.flights_pb2 import Airport
@@ -27,6 +29,19 @@ CONSENT_COOKIE = "SOCS=CAESHAgBEhJnd3NfMjAyMzA4MTAtMF9SQzIaAmVuIAEaBgiAo_CmBg; C
 
 class GoogleFlightsError(Exception):
     pass
+
+
+# Lieu Google (pays, région, ville, île…) : identifiant Knowledge Graph, ex. "/m/03_3d" = Japon.
+# Dans `tfs`, un lieu = {1: type, 2: code} ; le type 3 accepte pays et villes (Google choisit les aéroports).
+MID_RE = re.compile(r"^/[mg]/[0-9a-z_]{2,24}$")
+
+
+def is_place_id(code: str) -> bool:
+    return bool(MID_RE.match(code or ""))
+
+
+def _location(code: str) -> bytes:
+    return (bytes([0x08, 0x03]) if is_place_id(code) else b"") + _field(0x12, code.encode())
 
 
 @dataclass
@@ -180,7 +195,7 @@ def parse_full(html: str) -> tuple[list[Offer], Insights | None, dict[str, str]]
 def _offers_from(payload) -> tuple[list[Offer], int]:
     """(vols avec prix, nombre de vols listés sans prix)."""
     offers, unpriced = [], 0
-    for block in (payload[2], payload[3]):  # "meilleurs vols" puis "autres vols"
+    for block in payload[2:4]:  # "meilleurs vols" puis "autres vols" (absents si aucun résultat)
         for k in (block or [[]])[0] or []:
             if (o := _parse_offer(k)) is not None:
                 offers.append(o)
@@ -379,6 +394,55 @@ def full_search(legs, opts: SearchOptions, fetch_full) -> tuple[SearchResult, in
     return _merge(res, [SearchResult(offers, None, base.url, links), base]), unpriced
 
 
+SUGGEST_URL = "https://www.google.com/_/FlightsFrontendUi/data/batchexecute"
+_KINDS = {1: "airport", 3: "city", 4: "region"}
+
+
+def suggest_places(query: str, language="fr") -> list[dict]:
+    """Autocomplétion de Google Flights (RPC H028ib, sans jeton) : pays, régions, villes (avec leurs
+    aéroports proches), aéroports. Mêmes propositions que le champ « Où allez-vous ? » de Google."""
+    inner = json.dumps([query, [1, 2, 3, 5, 4], None, [1, 1, 1], 1], ensure_ascii=False)
+    body = urlencode({"f.req": json.dumps([[["H028ib", inner, None, "generic"]]], ensure_ascii=False)})
+    client = GoogleFlights().client
+    res = client.post(
+        SUGGEST_URL, params={"rpcids": "H028ib", "source-path": "/travel/flights", "hl": language, "gl": "FR", "rt": "c"},
+        content=body.encode(),
+        headers={"Content-Type": "application/x-www-form-urlencoded;charset=UTF-8", "Origin": "https://www.google.com",
+                 "Referer": f"https://www.google.com/travel/flights?hl={language}&gl=FR"},
+    )
+    if res.status_code != 200:
+        raise GoogleFlightsError(f"autocomplétion : HTTP {res.status_code}")
+    data = None
+    for line in res.text.splitlines():
+        if line.startswith('[["wrb.fr"'):
+            row = json.loads(line)[0]
+            data = json.loads(row[2]) if row[2] else None
+            break
+    if data is None:
+        raise GoogleFlightsError("autocomplétion : réponse illisible")
+
+    out = []
+    for group in (data[0] or []):
+        top = group[0]
+        kind = _KINDS.get(top[0])
+        if not kind or top[4] == "/m/02j71":  # « N'importe où » : c'est l'onglet Explorer
+            continue
+        airports = [
+            {"code": a[0][5], "name": a[0][1], "distance": a[1]}
+            for a in (group[1] if len(group) > 1 and group[1] else [])
+            if a[0][0] == 1 and a[0][5]  # aéroports seulement (pas les gares)
+        ]
+        out.append({
+            "kind": kind,
+            "code": top[5] if kind == "airport" and top[5] else top[4],
+            "name": top[1],
+            "city": top[2],
+            "detail": top[3],
+            "airports": airports,
+        })
+    return out
+
+
 def multicity_url(legs, opts: SearchOptions, currency="EUR", language="fr") -> str:
     """Lien Google Flights « multi-destinations » (un seul billet) : le résultat n'est pas lisible
     côté serveur, l'appli compare donc avec des billets séparés et renvoie vers Google."""
@@ -418,7 +482,7 @@ def _encode_tfs(legs, trip, opts, selected=None, **legacy) -> str:
     for i, (d, a, b) in enumerate(legs):
         hours = opts.dep_hours if i == 0 else (opts.ret_dep_hours if i == 1 and trip == "round-trip" else None)
         flights.append(FlightQuery(
-            date=d, from_airport=a.split("+")[0], to_airport=b.split("+")[0],
+            date=d, from_airport="CDG", to_airport="CDG",  # remplacés ci-dessous (aéroports multiples, pays, villes)
             airlines=[c for c in (opts.airlines or []) if c in ALLIANCES] or None,
             earliest_departure_hour=hours[0] if hours else None,
             latest_departure_hour=hours[1] if hours else None,
@@ -442,9 +506,11 @@ def _encode_tfs(legs, trip, opts, selected=None, **legacy) -> str:
     raw = info.SerializeToString()
     carriers = [c for c in (opts.airlines or []) if c not in ALLIANCES]
     for i, (fd, (_, a, b)) in enumerate(zip(flight_data, legs)):
+        fd.ClearField("from_airport")
+        fd.ClearField("to_airport")
         extra = b"".join(_segment_field(*sg) for sg in selected) if (selected and i == 0) else b""
-        extra += b"".join(_field(0x6A, Airport(airport=x).SerializeToString()) for x in a.split("+")[1:])
-        extra += b"".join(_field(0x72, Airport(airport=x).SerializeToString()) for x in b.split("+")[1:])
+        extra += b"".join(_field(0x6A, _location(x)) for x in a.split("+"))  # champ 13 = départ(s)
+        extra += b"".join(_field(0x72, _location(x)) for x in b.split("+"))  # champ 14 = arrivée(s)
         extra += b"".join(_field(0x32, c.encode()) for c in carriers)  # champ 6 : compagnies
         raw += _field(0x1A, fd.SerializeToString() + extra)
     return b64encode(raw).decode()

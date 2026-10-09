@@ -49,3 +49,32 @@ export function searchPlaces(places: Place[], query: string, limit = 12): Place[
 
 /** Libellé court pour l'affichage : "Séoul", "Paris (CDG + Orly)" → "Paris". */
 export const shortLabel = (p: Place) => (p.rank === 3 ? p.city : `${p.city.split(" (")[0]} ${p.code}`);
+
+/** Pays, région ou ville Google (identifiant /m/… ou /g/…), par opposition à un code IATA. */
+export const isPlaceId = (code: string) => /^\/[mg]\//.test(code);
+
+/** Texte secondaire sous un lieu choisi : aéroports, ou « Tous les aéroports » pour un pays. */
+export const placeDetail = (code: string, detail?: string) => detail || (isPlaceId(code) ? "Tous les aéroports" : code.replace(/\+/g, " + "));
+
+let countries: Map<string, string> | null = null;
+
+/** Code pays ISO d'après son nom en français (« Japon » → JP), pour afficher le drapeau. */
+export function countryIso(name: string | null | undefined): string {
+  if (!name) return "";
+  if (!countries) {
+    countries = new Map();
+    try {
+      const dn = new Intl.DisplayNames(["fr"], { type: "region" });
+      const A = 65;
+      for (let i = 0; i < 26; i++)
+        for (let j = 0; j < 26; j++) {
+          const iso = String.fromCharCode(A + i, A + j);
+          const label = dn.of(iso);
+          if (label && label !== iso) countries.set(norm(label), iso);
+        }
+    } catch {
+      // navigateur sans Intl.DisplayNames : pas de drapeau
+    }
+  }
+  return countries.get(norm(name)) || "";
+}

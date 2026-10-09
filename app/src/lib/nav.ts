@@ -43,7 +43,12 @@ export const saveQuery = (q: SearchQuery) => localStorage.setItem(SEARCH_KEY, JS
 
 /** Ouvre l'onglet Recherche avec ce trajet et lance la recherche. */
 export function openSearch(q: Partial<SearchQuery>) {
-  saveQuery({ ...savedQuery(), ...q });
+  // Nouveau départ / nouvelle destination : on oublie le texte secondaire de l'ancien lieu
+  const reset: Partial<SearchQuery> = {
+    ...(q.origin !== undefined && q.originDetail === undefined ? { originDetail: undefined } : {}),
+    ...(q.destination !== undefined && q.destinationDetail === undefined ? { destinationDetail: undefined } : {}),
+  };
+  saveQuery({ ...savedQuery(), ...reset, ...q });
   sessionStorage.setItem("gt-autorun", "1");
   window.dispatchEvent(new Event("gt-search-prefill"));
   go("/recherche");

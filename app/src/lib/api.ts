@@ -41,6 +41,8 @@ export type SearchQuery = {
   destination: string;
   originLabel: string;
   destinationLabel: string;
+  originDetail?: string; // ex. « Tous les aéroports du pays », « HND · NRT »
+  destinationDetail?: string;
   depart: string;
   ret: string | null;
   stops: Stops;
@@ -58,6 +60,16 @@ export type SearchResponse = {
   insights: Insights | null;
   google_url: string;
   links: Links;
+};
+
+/** Proposition de l'autocomplétion Google Flights (pays, région, ville, aéroport). */
+export type GPlace = {
+  kind: "airport" | "city" | "region";
+  code: string; // code IATA, ou identifiant Google (/m/…) pour un pays, une région, une ville
+  name: string;
+  city: string | null;
+  detail: string | null;
+  airports: { code: string; name: string; distance: string }[];
 };
 
 export type FlexDay = { depart: string; ret: string | null; price: number | null };
@@ -253,6 +265,7 @@ export const api = {
   explore: (p: { origin: string; depart: string; ret: string | null; stops: Stops; cabin?: Cabin; pax?: Pax }) =>
     call<{ items: ExploreItem[]; stale?: boolean; fetched_at?: string }>(`/api/explore?${qs({ origin: p.origin, depart: p.depart, ret: p.ret, ...paxParams(p) })}`),
   multi: (body: Record<string, unknown>) => call<MultiResponse>("/api/multi", { method: "POST", body: JSON.stringify(body) }),
+  places: (q: string, signal?: AbortSignal) => call<{ places: GPlace[] }>(`/api/places?${qs({ q })}`, { signal }),
   health: () => call<{ ok: boolean; last_check: string | null; error: string | null }>("/api/health"),
   watches: (device: string) => call<{ watches: Watch[] }>(`/api/watches?${qs({ device })}`),
   createWatch: (body: Record<string, unknown>) => call<Watch>("/api/watches", { method: "POST", body: JSON.stringify(body) }),

@@ -24,7 +24,8 @@ from pydantic import BaseModel, Field  # noqa: E402
 from tracker import alerts, deals, webpush  # noqa: E402
 from tracker.bags import BAG_INCLUDED_CARRIERS  # noqa: E402
 from tracker.gflights import (  # noqa: E402
-    GoogleFlights, GoogleFlightsError, SearchOptions, deep_search, full_search, multicity_url, search_with_bags,
+    GoogleFlights, GoogleFlightsError, SearchOptions, deep_search, full_search, is_place_id, multicity_url,
+    search_with_bags, suggest_places,
 )
 from tracker.links import booking_url, partner_links  # noqa: E402
 from tracker.store import get_store  # noqa: E402
@@ -40,7 +41,11 @@ FULL_LIST_URL = os.environ.get("FULL_LIST_URL")  # sinon https://<domaine de l'a
 # --- Validation ---
 
 def _code(v: str) -> str:
-    v = (v or "").upper().replace(" ", "+")
+    """Code IATA (ou plusieurs séparés par +), ou lieu Google (pays, ville… ex. /m/03_3d)."""
+    v = (v or "").strip()
+    if is_place_id(v):
+        return v
+    v = v.upper().replace(" ", "+")
     if not CODE_RE.match(v):
         raise HTTPException(400, f"Code aéroport invalide : {v}")
     return v
@@ -149,6 +154,27 @@ def health():
     return {"ok": h.get("ok", True), "store": type(store).__name__, "last_check": h.get("at"), "error": h.get("error")}
 
 
+def _links(o: str, d: str, depart: str, ret: str | None, pax: int, offers) -> dict:
+    """Liens Trip.com / Kayak / Skyscanner. Pour un pays ou une ville sans code IATA, on prend les
+    aéroports du vol le moins cher trouvé."""
+    if is_place_id(o) or is_place_id(d):
+        best = min(offers, key=lambda x: x.price, default=None)
+        if best is None:
+            return {}
+        route = best.route.split("-")
+        o = route[0] if is_place_id(o) else o
+        d = route[-1] if is_place_id(d) else d
+    return partner_links(o, d, depart, ret, pax)
+
+
+@app.get("/api/places")
+def places(q: str = Query(..., min_length=1, max_length=60)):
+    """Autocomplétion de Google Flights : pays, régions, villes (avec aéroports proches), aéroports."""
+    key = q.strip().lower()
+    return _cached(_cache_key("places", key), 7 * 24 * 3600, lambda: {"places": _search(lambda: suggest_places(key))},
+                   keep_last_good=False)
+
+
 @app.get("/api/config")
 def config():
     return {"vapid_public_key": webpush.public_key()}
@@ -222,7 +248,7 @@ def search(
                 "level": ins.level, "history": ins.history,
             } if ins else None,
             "google_url": res.url,
-            "links": partner_links(o, d, depart, ret, opts.adults + opts.children),
+            "links": _links(o, d, depart, ret, opts.adults + opts.children, res.offers),
             **({"_ttl": 60} if deep and not full else {}),  # repli : on retentera vite la liste complète
         }
 
@@ -353,7 +379,7 @@ def multi(body: MultiIn):
             offers.append(item)
         offers.sort(key=lambda x: x["total"])
         return {"origin": o, "destination": dst, "date": d, "offers": offers[:15], "google_url": res.url,
-                "links": partner_links(o, dst, d, None, opts.adults + opts.children)}
+                "links": _links(o, dst, d, None, opts.adults + opts.children, res.offers)}
 
     with ThreadPoolExecutor(max_workers=5) as ex:
         out = list(ex.map(lambda i: _search(lambda: one(i)), range(len(legs))))

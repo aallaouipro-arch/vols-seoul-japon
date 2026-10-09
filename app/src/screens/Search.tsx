@@ -11,6 +11,7 @@ import { RangeBar } from "../components/charts";
 import { LevelBadge, SectionTitle, Skeleton, useToast } from "../components/ui";
 import { api, type FlexDay, type Offer, type SearchQuery, type SearchResponse, type Stops } from "../lib/api";
 import { addDays, ago, dayMonth, daysBetween, euro, shortDate, todayIso } from "../lib/format";
+import { placeDetail } from "../lib/airports";
 import { saveQuery, savedQuery } from "../lib/nav";
 
 type TripType = "rt" | "ow" | "multi";
@@ -226,13 +227,22 @@ export default function SearchScreen() {
                   <span className="w-8 text-[11px] font-medium text-muted">{k === "origin" ? "De" : "Vers"}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[17px] font-semibold">{k === "origin" ? q.originLabel : q.destinationLabel}</span>
-                    <span className="block text-xs text-muted">{(k === "origin" ? q.origin : q.destination).replace(/\+/g, " + ")}</span>
+                    <span className="block truncate text-xs text-muted">{k === "origin" ? placeDetail(q.origin, q.originDetail) : placeDetail(q.destination, q.destinationDetail)}</span>
                   </span>
                 </button>
               ))}
               <motion.button
                 whileTap={{ rotate: 180, scale: 0.9 }}
-                onClick={() => update({ origin: q.destination, destination: q.origin, originLabel: q.destinationLabel, destinationLabel: q.originLabel })}
+                onClick={() =>
+                  update({
+                    origin: q.destination,
+                    destination: q.origin,
+                    originLabel: q.destinationLabel,
+                    destinationLabel: q.originLabel,
+                    originDetail: q.destinationDetail,
+                    destinationDetail: q.originDetail,
+                  })
+                }
                 className="absolute top-1/2 right-4 grid size-10 -translate-y-1/2 place-items-center rounded-full bg-ink-2 text-white ring-1 ring-white/15"
                 aria-label="Inverser départ et arrivée"
               >
@@ -448,7 +458,9 @@ export default function SearchScreen() {
         open={picker !== null}
         title={picker === "origin" ? "Départ" : "Destination"}
         onClose={() => setPicker(null)}
-        onPick={(code, label) => update(picker === "origin" ? { origin: code, originLabel: label } : { destination: code, destinationLabel: label })}
+        onPick={(code, label, detail) =>
+          update(picker === "origin" ? { origin: code, originLabel: label, originDetail: detail } : { destination: code, destinationLabel: label, destinationDetail: detail })
+        }
       />
       <PaxCabinSheet open={paxOpen} onClose={() => setPaxOpen(false)} pax={pax} cabin={cabin} onChange={(p, c) => update({ pax: p, cabin: c })} />
       {res && ranQuery && (

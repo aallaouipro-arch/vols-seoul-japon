@@ -1,16 +1,45 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "installCommand": "cd app && npm ci",
+  "installCommand": "npm ci && cd app && npm ci",
   "buildCommand": "cd app && npm run build",
   "outputDirectory": "app/dist",
-  "regions": ["cdg1"],
+  "regions": [
+    "cdg1"
+  ],
   "functions": {
-    "api/index.py": { "maxDuration": 60 }
+    "api/index.py": {
+      "maxDuration": 60,
+      "excludeFiles": "{node_modules/**,app/**}"
+    },
+    "api/full.js": {
+      "maxDuration": 60
+    }
   },
-  "rewrites": [{ "source": "/api/(.*)", "destination": "/api/index" }],
+  "rewrites": [
+    {
+      "source": "/api/((?!full).*)",
+      "destination": "/api/index"
+    }
+  ],
   "headers": [
-    { "source": "/sw.js", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
-    { "source": "/api/(.*)", "headers": [{ "key": "Cache-Control", "value": "no-store" }] }
+    {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    },
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    }
   ]
 }

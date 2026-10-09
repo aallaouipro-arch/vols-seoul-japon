@@ -1,0 +1,10 @@
+{
+  "name": "google-tracker-browser",
+  "private": true,
+  "type": "module",
+  "description": "Fonction Vercel /api/full : vrai navigateur pour la liste complète Google Flights",
+  "dependencies": {
+    "@sparticuz/chromium": "153.0.0",
+    "puppeteer-core": "25.13.0"
+  }
+}

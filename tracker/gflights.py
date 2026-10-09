@@ -173,17 +173,36 @@ def parse_full(html: str) -> tuple[list[Offer], Insights | None, dict[str, str]]
     if data.endswith("errorHasStatus: true"):
         raise GoogleFlightsError("Google a renvoyé une erreur pour cette recherche")
     payload = json.loads(data)
+    offers, _ = _offers_from(payload)
+    return offers, _parse_insights(payload[5] if len(payload) > 5 else None), _bag_links(payload)
 
-    offers = []
+
+def _offers_from(payload) -> tuple[list[Offer], int]:
+    """(vols avec prix, nombre de vols listés sans prix)."""
+    offers, unpriced = [], 0
     for block in (payload[2], payload[3]):  # "meilleurs vols" puis "autres vols"
         for k in (block or [[]])[0] or []:
             if (o := _parse_offer(k)) is not None:
                 offers.append(o)
-    bag_links = {}
+            else:
+                unpriced += 1
+    return offers, unpriced
+
+
+def _bag_links(payload) -> dict[str, str]:
+    links = {}
     for row in (payload[11] if len(payload) > 11 and payload[11] else []):
         if isinstance(row, list) and len(row) > 2 and row[0] and row[2]:
-            bag_links[row[0]] = row[2]
-    return offers, _parse_insights(payload[5] if len(payload) > 5 else None), bag_links
+            links[row[0]] = row[2]
+    return links
+
+
+def parse_full_list(raw: str) -> tuple[list[Offer], int, dict[str, str]]:
+    """Liste complète (« Afficher plus de vols », RPC GetShoppingResults lue par api/full.js) :
+    même structure que la 1re page. Renvoie (vols avec prix, nb de vols sans prix, liens bagages)."""
+    payload = json.loads(raw)
+    offers, unpriced = _offers_from(payload)
+    return offers, unpriced, _bag_links(payload)
 
 
 class SearchOptions:
@@ -335,6 +354,29 @@ def deep_search(legs, opts: SearchOptions, extra_carriers: list[str] | None = No
     if base is None:
         raise GoogleFlightsError("aucune réponse de Google Flights")
     return _merge(base, [r for r in results[1:] if r])
+
+
+def full_search(legs, opts: SearchOptions, fetch_full) -> tuple[SearchResult, int]:
+    """Liste complète de Google Flights, comme son bouton « Afficher plus de vols ».
+
+    `fetch_full(tfs)` renvoie la réponse du navigateur (api/full.js) : None si Google n'affiche pas de
+    bouton (la 1re page contient déjà tout). En parallèle, la 1re page lue directement fournit la
+    tendance des prix. Renvoie (résultat, nombre de vols listés sans prix par Google)."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    tfs = _encode_tfs(legs, "one-way" if len(legs) == 1 else "round-trip", opts)
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        page = ex.submit(GoogleFlights()._get, tfs)
+        full = ex.submit(fetch_full, tfs)
+        base = page.result()
+        raw = full.result()
+    if not raw:
+        return base, 0
+    offers, unpriced, links = parse_full_list(raw)
+    if not offers:
+        raise GoogleFlightsError("liste complète vide")
+    res = SearchResult(offers=[], insights=base.insights, url=base.url, bag_links=base.bag_links)
+    return _merge(res, [SearchResult(offers, None, base.url, links), base]), unpriced
 
 
 def multicity_url(legs, opts: SearchOptions, currency="EUR", language="fr") -> str:

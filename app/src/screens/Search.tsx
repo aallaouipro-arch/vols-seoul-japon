@@ -14,6 +14,7 @@ import { addDays, ago, dayMonth, daysBetween, euro, shortDate, todayIso } from "
 import { saveQuery, savedQuery } from "../lib/nav";
 
 type TripType = "rt" | "ow" | "multi";
+const PAGE = 40;
 
 function Segmented<T extends string>({ value, options, onChange, layoutId }: { value: T; options: [T, string][]; onChange: (v: T) => void; layoutId: string }) {
   return (
@@ -74,6 +75,10 @@ export default function SearchScreen() {
   const [res, setRes] = useState<SearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [deepLoading, setDeepLoading] = useState(false);
+  // Liste complète Google (« Afficher plus de vols ») préchargée en arrière-plan après chaque recherche
+  const [full, setFull] = useState<SearchResponse | null>(null);
+  const fullReq = useRef<Promise<SearchResponse> | null>(null);
+  const runId = useRef(0);
   const [error, setError] = useState("");
   const [flex, setFlex] = useState<FlexDay[] | null>(null);
   const [sort, setSort] = useState<Sort>("price");
@@ -110,10 +115,17 @@ export default function SearchScreen() {
       setFlex(null);
       setFilters(emptyFilters);
       setRanQuery(query);
+      setFull(null);
+      setDeepLoading(false);
+      const id = ++runId.current;
+      fullReq.current = null;
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
       try {
         setRes(await api.search(query));
         api.flex(query).then((f) => setFlex(f.days)).catch(() => setFlex([]));
+        const req = api.search(query, true);
+        fullReq.current = req;
+        req.then((r) => id === runId.current && setFull(r)).catch(() => {});
       } catch (e) {
         setError((e as Error).message);
       } finally {
@@ -125,17 +137,21 @@ export default function SearchScreen() {
 
   const runDeep = async () => {
     if (!ranQuery) return;
+    const id = runId.current;
     setDeepLoading(true);
     try {
-      const r = await api.search(ranQuery, true);
+      const r = await (fullReq.current || api.search(ranQuery, true));
+      if (id !== runId.current) return;
       setRes(r);
-      toast(`${r.offers.length} vols trouvés`, "good");
+      toast(r.query?.full ? `${r.offers.length} vols : liste complète Google Flights` : `${r.offers.length} vols trouvés`, "good");
     } catch (e) {
-      toast((e as Error).message, "bad");
+      fullReq.current = null; // nouvel essai au prochain clic
+      if (id === runId.current) toast((e as Error).message, "bad");
     } finally {
-      setDeepLoading(false);
+      if (id === runId.current) setDeepLoading(false);
     }
   };
+  const moreCount = full && res ? full.offers.length - res.offers.length : 0;
 
   // Préremplissage depuis l'accueil, Explorer ou une alerte
   useEffect(() => {
@@ -157,6 +173,18 @@ export default function SearchScreen() {
   }, []);
 
   const offers = useMemo(() => applyFilters([...(res?.offers || [])], filters, sort), [res, filters, sort]);
+  // Jusqu'à 300 vols : affichage par paquets de 40 au fil du défilement
+  const [visible, setVisible] = useState(PAGE);
+  useEffect(() => setVisible(PAGE), [offers]);
+  const sentinel = useRef<HTMLDivElement>(null);
+  const hasMore = offers.length > visible;
+  useEffect(() => {
+    const el = sentinel.current;
+    if (!el || !hasMore) return;
+    const io = new IntersectionObserver((e) => e[0].isIntersecting && setVisible((v) => v + PAGE), { rootMargin: "800px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasMore, visible]);
   const cheapest = res?.offers.length ? Math.min(...res.offers.map((o) => o.total)) : null;
   const flexMin = flex?.length ? Math.min(...flex.filter((d) => d.price).map((d) => d.price!)) : null;
   const nFilters = activeCount(filters);
@@ -352,10 +380,15 @@ export default function SearchScreen() {
                   </div>
                 )}
                 <div className="space-y-3">
-                  {offers.map((o, i) => (
-                    <OfferCard key={`${o.depart}-${o.route}-${o.price}-${i}`} offer={o} index={i} cheapest={o.total === cheapest} onClick={() => setSelected(o)} />
+                  {offers.slice(0, visible).map((o, i) => (
+                    <OfferCard key={`${o.depart}-${o.route}-${o.price}-${i}`} offer={o} index={i % PAGE} cheapest={o.total === cheapest} onClick={() => setSelected(o)} />
                   ))}
                 </div>
+                {hasMore && (
+                  <div ref={sentinel} className="py-4 text-center text-xs text-muted">
+                    {visible} vols affichés sur {offers.length}…
+                  </div>
+                )}
 
                 {!res.query?.deep ? (
                   <motion.button
@@ -367,14 +400,43 @@ export default function SearchScreen() {
                     {deepLoading ? (
                       <>
                         <motion.span animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }} className="size-4 rounded-full border-2 border-white/30 border-t-white" />
-                        Recherche approfondie (~20 requêtes)…
+                        Chargement de tous les vols de Google…
                       </>
+                    ) : moreCount > 0 ? (
+                      `Afficher plus de vols (+${moreCount})`
                     ) : (
                       "Afficher plus de vols"
                     )}
                   </motion.button>
+                ) : res.query?.full ? (
+                  <p className="mt-4 text-center text-xs leading-relaxed text-muted">
+                    Liste complète Google Flights : {res.offers.length} vols avec prix
+                    {res.query.unpriced ? (
+                      <>
+                        {" "}
+                        · {res.query.unpriced} autre{res.query.unpriced > 1 ? "s" : ""} sans prix affiché (
+                        <a href={res.google_url} target="_blank" rel="noreferrer" className="text-accent-2 underline">
+                          voir sur Google
+                        </a>
+                        )
+                      </>
+                    ) : null}
+                    .
+                  </p>
                 ) : (
-                  <p className="mt-4 text-center text-xs text-muted">Recherche approfondie : {res.offers.length} vols (tranches horaires, alliances, vols directs).</p>
+                  <p className="mt-4 text-center text-xs leading-relaxed text-muted">
+                    Liste complète de Google indisponible pour l'instant : recherche approfondie, {res.offers.length} vols (tranches horaires, alliances, vols directs).{" "}
+                    <button
+                      onClick={() => {
+                        fullReq.current = null;
+                        runDeep();
+                      }}
+                      disabled={deepLoading}
+                      className="font-semibold text-accent-2 underline"
+                    >
+                      {deepLoading ? "Chargement…" : "Réessayer"}
+                    </button>
+                  </p>
                 )}
               </motion.div>
             )}

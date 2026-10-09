@@ -51,7 +51,7 @@ export type SearchQuery = {
 };
 
 export type SearchResponse = {
-  query?: { deep?: boolean };
+  query?: { deep?: boolean; full?: boolean; unpriced?: number; full_error?: string | null };
   stale?: boolean;
   fetched_at?: string;
   offers: Offer[];

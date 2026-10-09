@@ -9,20 +9,22 @@ import os
 import re
 import sys
 import time
+import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from pathlib import Path
+from urllib.parse import urlencode
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query  # noqa: E402
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
 from tracker import alerts, deals, webpush  # noqa: E402
 from tracker.bags import BAG_INCLUDED_CARRIERS  # noqa: E402
 from tracker.gflights import (  # noqa: E402
-    GoogleFlights, GoogleFlightsError, SearchOptions, deep_search, multicity_url, search_with_bags,
+    GoogleFlights, GoogleFlightsError, SearchOptions, deep_search, full_search, multicity_url, search_with_bags,
 )
 from tracker.links import booking_url, partner_links  # noqa: E402
 from tracker.store import get_store  # noqa: E402
@@ -32,6 +34,7 @@ app = FastAPI(title="Google Tracker", docs_url="/api/docs", openapi_url="/api/op
 CODE_RE = re.compile(r"^[A-Z]{3}(\+[A-Z]{3}){0,3}$")
 DEVICE_RE = re.compile(r"^[A-Za-z0-9-]{8,64}$")
 TRIP_JSON_URL = os.environ.get("TRIP_JSON_URL", "https://aallaouipro-arch.github.io/vols-seoul-japon/trip.json")
+FULL_LIST_URL = os.environ.get("FULL_LIST_URL")  # sinon https://<domaine de l'appli>/api/full (Vercel)
 
 
 # --- Validation ---
@@ -124,6 +127,7 @@ def _cached(key: str, ttl: int, fn, keep_last_good: bool = True):
             return {**last, "stale": True, "stale_reason": str(getattr(e, "detail", e))}
         raise
     data["fetched_at"] = alerts.now_iso()
+    ttl = data.pop("_ttl", ttl)
     try:
         store.set(key, data, ex=ttl)
         if keep_last_good:
@@ -150,23 +154,55 @@ def config():
     return {"vapid_public_key": webpush.public_key()}
 
 
+def _full_list_fetcher(request: Request):
+    """Appel de la fonction navigateur api/full.js (liste complète de Google), ou None si indisponible."""
+    secret = os.environ.get("CRON_SECRET")
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+    url = FULL_LIST_URL or (f"https://{host}/api/full" if host and os.environ.get("VERCEL") else None)
+    if not secret or not url:
+        return None
+
+    def fetch(tfs: str) -> str | None:
+        req = urllib.request.Request(f"{url}?{urlencode({'tfs': tfs})}", headers={"Authorization": f"Bearer {secret}"})
+        try:
+            with urllib.request.urlopen(req, timeout=40) as r:
+                data = json.load(r)
+        except urllib.error.HTTPError as e:
+            raise GoogleFlightsError(f"navigateur : {e.read()[:200].decode(errors='replace')}")
+        return data.get("payload")
+
+    return fetch
+
+
 @app.get("/api/search")
 def search(
+    request: Request,
     origin: str, destination: str, depart: str, ret: str | None = None,
     bags_out: int = Query(0, ge=0, le=3), bags_ret: int = Query(0, ge=0, le=3),
     deep: bool = False, opts: SearchOptions = Depends(search_opts),
 ):
-    """Recherche en direct. deep=true : « Afficher plus de vols » (recherche découpée, 2-3× plus de vols)."""
+    """Recherche en direct. deep=true : « Afficher plus de vols » = liste complète de Google (vrai
+    navigateur, api/full.js) ; à défaut, recherche découpée (tranches horaires, alliances…)."""
     o, d = _code(origin), _code(destination)
     depart, ret = _date(depart, "de départ"), _date(ret, "de retour")
     if ret and ret < depart:
         raise HTTPException(400, "Le retour doit être après l'aller")
     legs = [(depart, o, d)] + ([(ret, d, o)] if ret else [])
     bags = [bags_out] + ([bags_ret] if ret else [])
+    fetch_full = _full_list_fetcher(request) if deep else None
 
     def fetch():
+        full, unpriced, full_error = False, 0, None
         if deep:
-            res = _search(lambda: deep_search(legs, opts, BAG_INCLUDED_CARRIERS if any(bags) else None))
+            res = None
+            if fetch_full:
+                try:
+                    res, unpriced = full_search(legs, opts, fetch_full)
+                    full = True
+                except Exception as e:  # navigateur refusé ou trop lent : recherche découpée
+                    full_error = str(e)[:200]
+            if res is None:
+                res = _search(lambda: deep_search(legs, opts, BAG_INCLUDED_CARRIERS if any(bags) else None))
         else:
             res = _search(lambda: search_with_bags(legs, -1, BAG_INCLUDED_CARRIERS, any(bags), opts))
         offers = []
@@ -178,7 +214,8 @@ def search(
         offers.sort(key=lambda x: x["total"])
         ins = res.insights
         return {
-            "query": {"origin": o, "destination": d, "depart": depart, "ret": ret, "bags": bags, "deep": deep},
+            "query": {"origin": o, "destination": d, "depart": depart, "ret": ret, "bags": bags, "deep": deep,
+                      "full": full, "unpriced": unpriced, "full_error": full_error},
             "offers": offers,
             "insights": {
                 "current": ins.current, "typical_low": ins.typical_low, "typical_high": ins.typical_high,
@@ -186,6 +223,7 @@ def search(
             } if ins else None,
             "google_url": res.url,
             "links": partner_links(o, d, depart, ret, opts.adults + opts.children),
+            **({"_ttl": 60} if deep and not full else {}),  # repli : on retentera vite la liste complète
         }
 
     return _cached(_cache_key("search", o, d, depart, ret, bags, deep, _opts_key(opts)), 600, fetch)
